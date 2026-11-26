@@ -1,0 +1,2975 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Tài Xỉu 3D VIP — Sic Bo Hoàng Gia</title>
+    <!-- Tailwind CSS cho hệ thống utility responsive -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js r128 qua CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Font sang trọng hỗ trợ đầy đủ tiếng Việt -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* =====================================================================
+           KHUNG KÍNH ÁNH KIM LOẠI VIP (TỐI ƯU GPU - KHÔNG DÙNG BACKDROP-FILTER NẶNG)
+           ===================================================================== */
+        .vip-glass {
+            background: linear-gradient(180deg, rgba(24, 15, 18, 0.94) 0%, rgba(10, 8, 12, 0.97) 100%);
+            border: 1px solid rgba(230, 184, 76, 0.42);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 246, 194, 0.18);
+        }
+
+        .vip-bar {
+            background: linear-gradient(180deg, rgba(18, 13, 16, 0.92) 0%, rgba(9, 8, 12, 0.96) 100%);
+            border: 1px solid rgba(230, 184, 76, 0.36);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 246, 194, 0.14);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #040b09;
+            color: #fef3c7;
+            font-family: 'Be Vietnam Pro', sans-serif;
+        }
+
+        .font-vip {
+            font-family: 'Playfair Display', serif;
+        }
+
+        /* =====================================================================
+           CANVAS 3D TOÀN MÀN HÌNH
+           ===================================================================== */
+        #three-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            touch-action: none;
+        }
+
+        #three-container canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        /* =====================================================================
+           BỐ CỤC HUD ADAPTIVE: PC 3 CỘT ĐỐI XỨNG <-> MOBILE DỌC MƯỢT MÀ
+           ===================================================================== */
+        #hud-layout {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none;
+            display: grid;
+            padding: 8px 10px max(8px, env(safe-area-inset-bottom));
+            gap: 8px;
+            /* Mặc định Mobile dọc (< 900px) */
+            grid-template-columns: 1fr 0.86fr 1fr;
+            grid-template-rows: auto minmax(180px, 1fr) auto auto auto;
+            grid-template-areas:
+                "header header header"
+                "stage  stage  stage"
+                "road   road   road"
+                "tai    bao    xiu"
+                "dock   dock   dock";
+        }
+
+        /* PC / Màn hình ngang (>= 900px và đủ chiều cao) */
+        @media (min-width: 900px) and (min-height: 520px) {
+            #hud-layout {
+                padding: 14px 20px 14px;
+                gap: 10px 18px;
+                max-width: 1460px;
+                margin: 0 auto;
+                grid-template-columns: minmax(215px, 270px) 1fr minmax(215px, 270px);
+                grid-template-rows: auto 1fr auto auto auto;
+                grid-template-areas:
+                    "header header header"
+                    "tai    stage  xiu"
+                    "tai    bao    xiu"
+                    "road   road   road"
+                    "dock   dock   dock";
+            }
+        }
+
+        .area-header { grid-area: header; }
+        .area-stage  { grid-area: stage; }
+        .area-tai    { grid-area: tai; }
+        .area-bao    { grid-area: bao; }
+        .area-xiu    { grid-area: xiu; }
+        .area-road   { grid-area: road; }
+        .area-dock   { grid-area: dock; }
+
+        /* =====================================================================
+           KHUNG KÍNH MỜ ÁNH KIM LOẠI VIP
+           ===================================================================== */
+        .vip-glass {
+            background: linear-gradient(180deg, rgba(22, 14, 16, 0.86) 0%, rgba(10, 8, 12, 0.93) 100%);
+            border: 1px solid rgba(230, 184, 76, 0.38);
+            box-shadow:
+                0 10px 30px rgba(0, 0, 0, 0.65),
+                inset 0 1px 0 rgba(255, 246, 194, 0.22);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .vip-bar {
+            background: linear-gradient(180deg, rgba(16, 12, 15, 0.84) 0%, rgba(9, 8, 12, 0.92) 100%);
+            border: 1px solid rgba(230, 184, 76, 0.34);
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 246, 194, 0.16);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .gold-gradient-text {
+            background: linear-gradient(180deg, #fffbe0 0%, #f5cd63 48%, #b87e16 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+        }
+
+        .silver-gradient-text {
+            background: linear-gradient(180deg, #ffffff 0%, #c7e0ff 52%, #7da4d8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+        }
+
+        /* =====================================================================
+           CÔNG TẮC GẠT "TỰ MỞ" TINH TẾ
+           ===================================================================== */
+        .vip-switch {
+            position: relative;
+            width: 40px;
+            height: 22px;
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(230, 184, 76, 0.45);
+            transition: background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+            flex-shrink: 0;
+        }
+
+        .vip-switch-thumb {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            border-radius: 9999px;
+            background: linear-gradient(180deg, #fef9c3, #d4a02c);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+            transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .vip-switch.active {
+            background: linear-gradient(90deg, #b45309, #eab308);
+            border-color: #fef08a;
+            box-shadow: 0 0 12px rgba(234, 179, 8, 0.55);
+        }
+
+        .vip-switch.active .vip-switch-thumb {
+            transform: translateX(18px);
+            background: linear-gradient(180deg, #ffffff, #fef08a);
+        }
+
+        /* =====================================================================
+           CÁC CỬA CƯỢC VIP (TÀI - BÃO - XỈU)
+           ===================================================================== */
+        .bet-card {
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+            pointer-events: auto;
+        }
+
+        .bet-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 50% 0%, rgba(255, 244, 196, 0.18), transparent 68%);
+            pointer-events: none;
+        }
+
+        .bet-card::after {
+            content: '';
+            position: absolute;
+            inset: 3px;
+            border-radius: inherit;
+            border: 1px solid rgba(255, 232, 150, 0.14);
+            pointer-events: none;
+        }
+
+        .bet-card:hover:not(.locked) {
+            transform: translateY(-2px);
+            border-color: rgba(254, 240, 138, 0.9);
+        }
+
+        .bet-card:active:not(.locked) {
+            transform: scale(0.975);
+        }
+
+        .bet-card.locked {
+            opacity: 0.78;
+            cursor: not-allowed;
+        }
+
+        /* Cửa TÀI: Đỏ rượu vang & Vàng kim hoàng gia */
+        .bet-tai {
+            background:
+                radial-gradient(ellipse at 50% 20%, rgba(185, 28, 44, 0.52), transparent 72%),
+                linear-gradient(165deg, rgba(98, 12, 24, 0.92) 0%, rgba(36, 5, 12, 0.95) 100%);
+            border: 1.5px solid rgba(245, 188, 72, 0.62);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.58), inset 0 0 24px rgba(220, 38, 38, 0.18);
+        }
+
+        .bet-tai:hover:not(.locked) {
+            box-shadow: 0 12px 32px rgba(220, 38, 38, 0.38), 0 0 18px rgba(245, 188, 72, 0.35);
+        }
+
+        /* Cửa XỈU: Xanh Lam Hoàng Gia & Bạc Ánh Kim */
+        .bet-xiu {
+            background:
+                radial-gradient(ellipse at 50% 20%, rgba(29, 108, 196, 0.45), transparent 72%),
+                linear-gradient(165deg, rgba(10, 40, 82, 0.92) 0%, rgba(6, 17, 38, 0.95) 100%);
+            border: 1.5px solid rgba(147, 197, 253, 0.56);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.58), inset 0 0 24px rgba(59, 130, 246, 0.18);
+        }
+
+        .bet-xiu:hover:not(.locked) {
+            box-shadow: 0 12px 32px rgba(37, 99, 235, 0.38), 0 0 18px rgba(147, 197, 253, 0.35);
+        }
+
+        /* Cửa BÃO: Tím Hoàng Tộc & Vàng Kim 1:24 */
+        .bet-bao {
+            background:
+                radial-gradient(ellipse at 50% 15%, rgba(162, 28, 175, 0.42), transparent 70%),
+                linear-gradient(165deg, rgba(58, 12, 74, 0.92) 0%, rgba(24, 6, 36, 0.96) 100%);
+            border: 1.5px solid rgba(234, 179, 8, 0.62);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.58), inset 0 0 20px rgba(217, 70, 239, 0.16);
+        }
+
+        .bet-bao:hover:not(.locked) {
+            box-shadow: 0 10px 28px rgba(192, 38, 211, 0.38), 0 0 18px rgba(250, 204, 21, 0.42);
+        }
+
+        /* Hiệu ứng cửa thắng rực sáng neon vàng */
+        .bet-card.winner {
+            animation: winnerNeonPulse 0.78s ease-in-out infinite alternate;
+            border-color: #fef08a !important;
+            z-index: 6;
+        }
+
+        @keyframes winnerNeonPulse {
+            0% {
+                box-shadow: 0 0 16px rgba(250, 204, 21, 0.75), inset 0 0 22px rgba(254, 240, 138, 0.25);
+                transform: translateY(-2px);
+            }
+            100% {
+                box-shadow: 0 0 38px rgba(250, 204, 21, 1), 0 0 64px rgba(234, 179, 8, 0.5), inset 0 0 34px rgba(254, 240, 138, 0.55);
+                transform: translateY(-4px);
+            }
+        }
+
+        /* Trên PC: TÀI và XỈU cao thanh lịch, căn giữa theo chiều dọc sân khấu */
+        @media (min-width: 900px) and (min-height: 520px) {
+            .bet-side-pc {
+                align-self: center;
+                min-height: 295px;
+                max-height: 360px;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+            }
+            .bet-bao-pc {
+                width: 100%;
+                max-width: 340px;
+                margin: 0 auto;
+                min-height: 58px;
+            }
+        }
+
+        /* =====================================================================
+           CHIP CASINO 3D NỔI KHỐI & CHỒNG CHIP ĐẶT CƯỢC
+           ===================================================================== */
+        .casino-chip {
+            position: relative;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            cursor: pointer;
+            transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, filter 0.2s ease;
+            box-shadow:
+                0 6px 12px rgba(0, 0, 0, 0.65),
+                inset 0 2px 3px rgba(255, 255, 255, 0.45),
+                inset 0 -4px 5px rgba(0, 0, 0, 0.5);
+            border: 3.5px dashed rgba(255, 255, 255, 0.9);
+        }
+
+        .casino-chip::after {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border-radius: 9999px;
+            border: 1.5px solid rgba(255, 255, 255, 0.35);
+            pointer-events: none;
+        }
+
+        .casino-chip:hover {
+            transform: translateY(-4px) scale(1.06);
+            filter: brightness(1.1);
+        }
+
+        .casino-chip.selected {
+            transform: translateY(-9px) scale(1.14);
+            box-shadow:
+                0 0 0 2.5px #fffbeb,
+                0 0 18px rgba(250, 204, 21, 0.85),
+                0 12px 22px rgba(0, 0, 0, 0.7);
+        }
+
+        .chip-10k  { background: radial-gradient(circle at 32% 28%, #38bdf8, #0284c7 62%, #0c4a6e); color: #fff; }
+        .chip-50k  { background: radial-gradient(circle at 32% 28%, #34d399, #059669 62%, #064e3b); color: #fff; }
+        .chip-100k { background: radial-gradient(circle at 32% 28%, #fb7185, #e11d48 62%, #881337); color: #fff; }
+        .chip-500k { background: radial-gradient(circle at 32% 28%, #c084fc, #7e22ce 62%, #3b0764); color: #fff; }
+        .chip-1m   { background: radial-gradient(circle at 32% 28%, #fef08a, #d97706 65%, #78350f); color: #2b0f02; border-color: #fffbeb; }
+
+        /* Chồng chip hiển thị trên cửa cược */
+        .chip-stack-wrap {
+            position: relative;
+            width: 26px;
+            height: 30px;
+            flex-shrink: 0;
+        }
+
+        .mini-chip {
+            position: absolute;
+            left: 0;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px dashed rgba(255, 255, 255, 0.88);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.75);
+        }
+
+        /* Chip bay khi người chơi nhấn đặt cược */
+        .flying-chip {
+            position: fixed;
+            z-index: 65;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 3px dashed rgba(255, 255, 255, 0.92);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 900;
+            pointer-events: none;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.65), 0 0 12px rgba(250, 204, 21, 0.55);
+            will-change: transform, opacity;
+        }
+
+        /* =====================================================================
+           NÚT BẤM VIP HOÀNG GIA
+           ===================================================================== */
+        .btn-shake-vip {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(180deg, #fff5a8 0%, #f5be3d 32%, #c98512 78%, #854d08 100%);
+            color: #290b03;
+            border: 1.5px solid #fef9c3;
+            box-shadow:
+                0 6px 22px rgba(234, 179, 8, 0.52),
+                inset 0 2px 2px rgba(255, 255, 255, 0.8),
+                inset 0 -3px 5px rgba(102, 52, 4, 0.45);
+            transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.2s ease;
+        }
+
+        .btn-shake-vip::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -80%;
+            width: 48%;
+            height: 200%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+            transform: rotate(25deg);
+            animation: goldSheen 2.8s infinite;
+        }
+
+        @keyframes goldSheen {
+            0%, 62% { left: -80%; }
+            100% { left: 145%; }
+        }
+
+        .btn-shake-vip:hover:not(:disabled) {
+            filter: brightness(1.08);
+            transform: translateY(-1.5px);
+            box-shadow: 0 10px 28px rgba(250, 204, 21, 0.72);
+        }
+
+        .btn-shake-vip:active:not(:disabled) {
+            transform: translateY(1px) scale(0.97);
+        }
+
+        .btn-shake-vip:disabled {
+            opacity: 0.45;
+            filter: grayscale(0.5);
+            cursor: not-allowed;
+        }
+
+        .btn-vip-action {
+            background: linear-gradient(180deg, rgba(48, 22, 28, 0.92), rgba(22, 10, 14, 0.96));
+            border: 1px solid rgba(230, 184, 76, 0.44);
+            color: #fde68a;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 246, 194, 0.14);
+            transition: all 0.15s ease;
+        }
+
+        .btn-vip-action:hover:not(:disabled) {
+            background: linear-gradient(180deg, rgba(78, 28, 38, 0.96), rgba(38, 12, 18, 0.98));
+            border-color: rgba(254, 240, 138, 0.85);
+            transform: translateY(-1px);
+        }
+
+        .btn-vip-action:active:not(:disabled) {
+            transform: scale(0.96);
+        }
+
+        .btn-vip-action:disabled {
+            opacity: 0.38;
+            cursor: not-allowed;
+        }
+
+        .btn-vip-action.allin-armed {
+            background: linear-gradient(180deg, #dc2626, #7f1d1d);
+            border-color: #fef08a;
+            color: #fff;
+            box-shadow: 0 0 18px rgba(239, 68, 68, 0.85);
+            animation: armedPulse 1s infinite;
+        }
+
+        @keyframes armedPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.045); }
+        }
+
+        /* =====================================================================
+           MODAL BẢNG SOI CẦU & THỐNG KÊ BIỂU ĐỒ TỔNG ĐIỂM VIP
+           ===================================================================== */
+        #roadmap-modal {
+            background: rgba(4, 6, 10, 0.86);
+        }
+
+        /* Hạt cầu phiên (Road Beads) */
+        .road-bead {
+            width: 22px;
+            height: 22px;
+            border-radius: 9999px;
+            font-size: 10px;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
+            transition: transform 0.15s ease;
+        }
+        .bead-tai {
+            background: radial-gradient(circle at 35% 30%, #f87171, #b91c1c);
+            color: #fef3c7;
+            border: 1px solid rgba(254, 240, 138, 0.65);
+        }
+        .bead-xiu {
+            background: radial-gradient(circle at 35% 30%, #60a5fa, #1d4ed8);
+            color: #ffffff;
+            border: 1px solid rgba(186, 230, 253, 0.7);
+        }
+        .bead-bao {
+            background: radial-gradient(circle at 35% 30%, #e879f9, #86198f);
+            color: #fef08a;
+            border: 1px solid #fde047;
+        }
+        .bead-latest {
+            transform: scale(1.14);
+            box-shadow: 0 0 10px rgba(250, 204, 21, 0.85);
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Animation Banner thắng cược */
+        .victory-banner {
+            transform: translate(-50%, -50%);
+            animation: victoryPop 2.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+        @keyframes victoryPop {
+            0%   { opacity: 0; transform: translate(-50%, -35%) scale(0.72); }
+            14%  { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+            22%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            82%  { opacity: 1; transform: translate(-50%, -54%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -68%) scale(0.95); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- =====================================================================
+         KHUNG HIỂN THỊ THREE.JS 3D TOÀN MÀN HÌNH
+         ===================================================================== -->
+    <div id="three-container"></div>
+
+    <!-- =====================================================================
+         LỚP GIAO DIỆN VIP OVERLAY (TỰ ĐỘNG CHUYỂN ĐỔI PC 3 CỘT <-> MOBILE DỌC)
+         ===================================================================== -->
+    <div id="hud-layout">
+
+        <!-- 1. HEADER TINH GỌN VIP -->
+        <header class="area-header vip-glass pointer-events-auto rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center justify-between gap-2">
+            <!-- Bên trái: Huy hiệu VIP + Số dư Xu ảo + Nút nạp nhanh (+) -->
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div class="hidden sm:flex items-center gap-2 pr-2.5 border-r border-amber-400/25 shrink-0">
+                    <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-300 via-amber-500 to-red-900 border border-amber-200/80 flex items-center justify-center shadow-lg">
+                        <svg class="w-4.5 h-4.5 text-amber-950" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5zm0 2h14v2H5v-2z"/>
+                        </svg>
+                    </div>
+                    <div class="leading-none">
+                        <div class="font-vip text-sm md:text-base font-black tracking-wider gold-gradient-text">SIC BO VIP</div>
+                        <div class="text-[9px] uppercase tracking-widest text-amber-300/70 font-semibold mt-0.5">Royal Casino 3D</div>
+                    </div>
+                </div>
+
+                <!-- Hộp Số dư Xu ảo -->
+                <div class="flex items-center gap-1.5 sm:gap-2 bg-black/55 border border-amber-400/45 rounded-xl pl-2 pr-1 py-1 sm:pl-3 sm:pr-1.5 sm:py-1 shadow-inner">
+                    <span class="w-5 h-5 rounded-full bg-gradient-to-b from-yellow-200 via-amber-400 to-amber-700 text-amber-950 font-black text-[11px] flex items-center justify-center shadow shrink-0">₫</span>
+                    <span id="balance-display" class="text-xs sm:text-base font-black text-amber-100 tabular-nums tracking-tight whitespace-nowrap">10,000,000</span>
+                    <button id="btn-refill" type="button" title="Nạp nhanh +10,000,000 Xu ảo"
+                        class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-b from-amber-300 to-amber-600 hover:brightness-110 active:scale-95 text-amber-950 font-black text-sm sm:text-base flex items-center justify-center shadow transition shrink-0">
+                        +
+                    </button>
+                </div>
+            </div>
+
+            <!-- Bên phải: Công tắc Tự mở + Nút Soi Cầu + Nút Âm thanh -->
+            <div class="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                <!-- Công tắc gạt TỰ MỞ (không cần gợi ý thừa) -->
+                <button id="btn-auto-open" type="button" role="switch" aria-checked="false" title="Tự động mở bát sau khi xóc"
+                    class="flex items-center gap-1.5 sm:gap-2 bg-black/45 hover:bg-black/65 border border-amber-400/35 rounded-xl px-2 py-1 sm:px-3 sm:py-1.5 transition cursor-pointer">
+                    <span class="text-[11px] sm:text-xs font-bold text-amber-100/95 whitespace-nowrap">Tự mở</span>
+                    <span id="auto-open-switch" class="vip-switch">
+                        <span class="vip-switch-thumb"></span>
+                    </span>
+                </button>
+
+                <!-- Nút mở bảng Soi Cầu chi tiết -->
+                <button id="btn-open-roadmap" type="button" title="Bảng Soi Cầu & Thống kê"
+                    class="btn-vip-action rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-bold flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-300" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l5-5 4 4 9-9M15 7h6v6"/>
+                    </svg>
+                    <span class="hidden xs:inline sm:inline">Soi Cầu</span>
+                </button>
+
+                <!-- Nút Âm thanh -->
+                <button id="btn-sound" type="button" title="Bật / Tắt âm thanh"
+                    class="btn-vip-action rounded-xl w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center" aria-label="Âm thanh">
+                    <svg id="icon-sound-on" class="w-4 h-4 text-amber-200" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H3v6h3l5 4V5z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                    </svg>
+                    <svg id="icon-sound-off" class="w-4 h-4 hidden text-red-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H3v6h3l5 4V5z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M23 9l-6 6M17 9l6 6"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- 2. VÙNG SÂN KHẤU NEO CAMERA 3D (#stage-anchor) -->
+        <div id="stage-anchor" class="area-stage relative pointer-events-none flex flex-col items-center justify-start">
+            <!-- Badge kết quả phiên gọn gàng ở sát mép trên sân khấu (không che bát đĩa) -->
+            <div id="result-badge" class="mt-0.5 sm:mt-1 opacity-0 scale-95 transition-all duration-300 pointer-events-none">
+                <div class="vip-glass rounded-full px-3.5 py-1 sm:px-4 sm:py-1.5 flex items-center gap-2.5 border-amber-300/75 shadow-2xl">
+                    <div id="result-dice-row" class="flex items-center gap-1"></div>
+                    <div class="h-4 w-px bg-amber-400/35"></div>
+                    <span id="result-sum-val" class="text-sm sm:text-base font-black text-amber-100 tabular-nums">12</span>
+                    <span id="result-outcome-tag" class="text-[11px] sm:text-xs font-black px-2 py-0.5 rounded-full tracking-wider">TÀI</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. CỬA TÀI (BÊN TRÁI TRÊN PC | TRÁI TRÊN MOBILE) -->
+        <div id="zone-tai" data-bet="tai" class="area-tai bet-card bet-tai bet-side-pc rounded-2xl p-2.5 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-start justify-between gap-1">
+                <div>
+                    <div class="font-vip text-xl sm:text-2xl lg:text-4xl font-black tracking-wider gold-gradient-text leading-none">TÀI</div>
+                    <div class="text-[10px] sm:text-xs lg:text-sm text-amber-100/80 font-semibold mt-1">Tổng 11 – 17</div>
+                </div>
+                <span class="text-[10px] sm:text-xs font-black bg-amber-500/20 border border-amber-300/65 text-amber-200 px-1.5 sm:px-2 py-0.5 rounded-md shrink-0">1 : 1</span>
+            </div>
+
+            <!-- Khung trang trí trung tâm trên PC -->
+            <div class="hidden lg:flex flex-col items-center justify-center my-auto py-3">
+                <div class="w-16 h-16 rounded-full border border-amber-400/35 bg-red-950/50 flex items-center justify-center shadow-inner">
+                    <span class="font-vip text-3xl font-black gold-gradient-text">大</span>
+                </div>
+                <div class="text-[11px] uppercase tracking-[0.2em] text-amber-300/65 font-bold mt-2">Cửa Tài Hoàng Gia</div>
+            </div>
+
+            <div class="mt-2 pt-1.5 sm:pt-2.5 border-t border-amber-300/25 flex items-center justify-between gap-1.5">
+                <div id="stack-tai" class="chip-stack-wrap hidden"></div>
+                <div class="ml-auto text-right">
+                    <div class="text-[9px] sm:text-[10px] uppercase tracking-wider text-amber-200/65 leading-none">Cược của bạn</div>
+                    <div id="bet-amt-tai" class="text-xs sm:text-sm lg:text-lg font-black text-amber-200 tabular-nums leading-tight mt-0.5">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. CỬA BÃO (DƯỚI BÁT ĐĨA TRÊN PC | GIỮA TRÊN MOBILE) -->
+        <div id="zone-bao" data-bet="bao" class="area-bao bet-card bet-bao bet-bao-pc rounded-2xl p-2.5 sm:px-4 sm:py-2.5 flex flex-col lg:flex-row lg:items-center justify-between gap-1.5">
+            <div class="flex items-start lg:items-center justify-between lg:justify-start gap-2">
+                <div>
+                    <div class="font-vip text-lg sm:text-xl lg:text-2xl font-black tracking-wider gold-gradient-text leading-none">BÃO</div>
+                    <div class="text-[9px] sm:text-[11px] text-fuchsia-100/80 font-semibold mt-0.5 whitespace-nowrap">Bộ 3 đồng nhất</div>
+                </div>
+                <span class="text-[10px] sm:text-xs font-black bg-amber-400/25 border border-amber-300/75 text-amber-100 px-1.5 sm:px-2 py-0.5 rounded-md shrink-0">1 : 24</span>
+            </div>
+
+            <div class="mt-auto lg:mt-0 pt-1.5 lg:pt-0 border-t lg:border-t-0 border-amber-300/20 flex items-center justify-between lg:justify-end gap-2">
+                <div id="stack-bao" class="chip-stack-wrap hidden"></div>
+                <div class="ml-auto text-right">
+                    <div class="text-[9px] uppercase tracking-wider text-fuchsia-200/70 leading-none">Đặt cược</div>
+                    <div id="bet-amt-bao" class="text-xs sm:text-sm lg:text-base font-black text-amber-200 tabular-nums leading-tight mt-0.5">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. CỬA XỈU (BÊN PHẢI TRÊN PC | PHẢI TRÊN MOBILE) -->
+        <div id="zone-xiu" data-bet="xiu" class="area-xiu bet-card bet-xiu bet-side-pc rounded-2xl p-2.5 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-start justify-between gap-1">
+                <div>
+                    <div class="font-vip text-xl sm:text-2xl lg:text-4xl font-black tracking-wider silver-gradient-text leading-none">XỈU</div>
+                    <div class="text-[10px] sm:text-xs lg:text-sm text-sky-100/80 font-semibold mt-1">Tổng 4 – 10</div>
+                </div>
+                <span class="text-[10px] sm:text-xs font-black bg-sky-500/20 border border-sky-300/60 text-sky-100 px-1.5 sm:px-2 py-0.5 rounded-md shrink-0">1 : 1</span>
+            </div>
+
+            <!-- Khung trang trí trung tâm trên PC -->
+            <div class="hidden lg:flex flex-col items-center justify-center my-auto py-3">
+                <div class="w-16 h-16 rounded-full border border-sky-300/35 bg-blue-950/55 flex items-center justify-center shadow-inner">
+                    <span class="font-vip text-3xl font-black silver-gradient-text">小</span>
+                </div>
+                <div class="text-[11px] uppercase tracking-[0.2em] text-sky-200/65 font-bold mt-2">Cửa Xỉu Hoàng Gia</div>
+            </div>
+
+            <div class="mt-2 pt-1.5 sm:pt-2.5 border-t border-sky-300/25 flex items-center justify-between gap-1.5">
+                <div id="stack-xiu" class="chip-stack-wrap hidden"></div>
+                <div class="ml-auto text-right">
+                    <div class="text-[9px] sm:text-[10px] uppercase tracking-wider text-sky-200/65 leading-none">Cược của bạn</div>
+                    <div id="bet-amt-xiu" class="text-xs sm:text-sm lg:text-lg font-black text-amber-200 tabular-nums leading-tight mt-0.5">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. THANH CẦU PHIÊN (CLICK MỞ BẢNG SOI CẦU CHI TIẾT) -->
+        <div id="road-strip-bar" role="button" tabindex="0" title="Nhấn để xem bảng Soi Cầu chi tiết"
+            class="area-road vip-bar pointer-events-auto rounded-xl px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 flex items-center gap-2.5 cursor-pointer hover:border-amber-300/65 transition">
+            <div class="flex items-center gap-2 text-[11px] sm:text-xs font-extrabold border-r border-amber-400/25 pr-2.5 shrink-0">
+                <span class="text-red-400">T:<strong id="stat-tai" class="text-amber-100 ml-0.5">0</strong></span>
+                <span class="text-sky-400">X:<strong id="stat-xiu" class="text-amber-100 ml-0.5">0</strong></span>
+                <span class="text-fuchsia-300">B:<strong id="stat-bao" class="text-amber-100 ml-0.5">0</strong></span>
+            </div>
+            <div id="history-beads" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 py-0.5"></div>
+            <svg class="w-4 h-4 text-amber-300/75 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+            </svg>
+        </div>
+
+        <!-- 7. KHAY CHIP CASINO & HÀNG NÚT ĐIỀU KHIỂN -->
+        <footer class="area-dock vip-glass pointer-events-auto rounded-2xl px-2.5 py-2 sm:px-4 sm:py-2.5 flex flex-col md:flex-row items-center justify-between gap-2.5">
+            <!-- 5 Chip Casino -->
+            <div class="flex items-center justify-center gap-2 sm:gap-3">
+                <button type="button" data-chip="10000" class="casino-chip chip-10k w-10 h-10 sm:w-12 sm:h-12 text-[10px] sm:text-xs selected">10K</button>
+                <button type="button" data-chip="50000" class="casino-chip chip-50k w-10 h-10 sm:w-12 sm:h-12 text-[10px] sm:text-xs">50K</button>
+                <button type="button" data-chip="100000" class="casino-chip chip-100k w-10 h-10 sm:w-12 sm:h-12 text-[9px] sm:text-xs">100K</button>
+                <button type="button" data-chip="500000" class="casino-chip chip-500k w-10 h-10 sm:w-12 sm:h-12 text-[9px] sm:text-xs">500K</button>
+                <button type="button" data-chip="1000000" class="casino-chip chip-1m w-10 h-10 sm:w-12 sm:h-12 text-[10px] sm:text-xs">1M</button>
+            </div>
+
+            <!-- Hàng nút thao tác: Xóa cược | Cược lại | x2 | XÓC | Tất tay -->
+            <div class="grid grid-cols-5 md:flex items-center gap-1.5 sm:gap-2 w-full md:w-auto">
+                <button id="btn-clear" type="button" class="btn-vip-action rounded-xl px-1.5 sm:px-3.5 py-2.5 text-[11px] sm:text-xs font-extrabold whitespace-nowrap">
+                    Xóa cược
+                </button>
+                <button id="btn-rebet" type="button" class="btn-vip-action rounded-xl px-1.5 sm:px-3.5 py-2.5 text-[11px] sm:text-xs font-extrabold whitespace-nowrap">
+                    Cược lại
+                </button>
+                <button id="btn-double" type="button" class="btn-vip-action rounded-xl px-1.5 sm:px-3.5 py-2.5 text-[11px] sm:text-xs font-extrabold whitespace-nowrap">
+                    x2
+                </button>
+                <button id="btn-shake" type="button" class="btn-shake-vip rounded-xl px-2 sm:px-7 py-2.5 text-xs sm:text-base font-black tracking-widest uppercase">
+                    XÓC
+                </button>
+                <button id="btn-allin" type="button" class="btn-vip-action rounded-xl px-1.5 sm:px-3.5 py-2.5 text-[11px] sm:text-xs font-extrabold whitespace-nowrap">
+                    Tất tay
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Lớp chứa Banner thắng cược ánh kim & Chip bay -->
+    <div id="fx-overlay" class="fixed inset-0 z-40 pointer-events-none overflow-hidden"></div>
+
+    <!-- Container Toast thông báo (thay thế hoàn toàn alert/confirm) -->
+    <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-1.5 w-[90%] max-w-xs"></div>
+
+    <!-- =====================================================================
+         MODAL BẢNG SOI CẦU & THỐNG KÊ BIỂU ĐỒ TỔNG ĐIỂM VIP
+         ===================================================================== -->
+    <div id="roadmap-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
+        <div class="vip-glass rounded-2xl w-full max-w-xl max-h-[88vh] flex flex-col overflow-hidden border-amber-300/55 shadow-2xl">
+            <!-- Header Modal -->
+            <div class="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-amber-400/25 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_#facc15]"></span>
+                    <h2 class="font-vip text-lg sm:text-xl font-black gold-gradient-text tracking-wide">BẢNG SOI CẦU VIP</h2>
+                </div>
+                <button id="btn-close-roadmap" type="button" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-amber-100 font-bold flex items-center justify-center transition">✕</button>
+            </div>
+
+            <!-- Nội dung cuộn được -->
+            <div class="p-4 sm:p-5 overflow-y-auto space-y-4">
+                <!-- Thanh tỷ lệ % Tài / Xỉu / Bão -->
+                <div>
+                    <div class="flex items-center justify-between text-xs font-extrabold mb-1.5">
+                        <span class="text-red-400">TÀI <span id="modal-pct-tai" class="text-amber-100">0%</span></span>
+                        <span class="text-fuchsia-300">BÃO <span id="modal-pct-bao" class="text-amber-100">0%</span></span>
+                        <span class="text-sky-400">XỈU <span id="modal-pct-xiu" class="text-amber-100">0%</span></span>
+                    </div>
+                    <div class="w-full h-3 rounded-full bg-black/60 border border-amber-400/30 overflow-hidden flex">
+                        <div id="bar-tai" class="h-full bg-gradient-to-r from-red-700 to-amber-500 transition-all duration-500" style="width: 50%"></div>
+                        <div id="bar-bao" class="h-full bg-gradient-to-r from-fuchsia-600 to-purple-500 transition-all duration-500" style="width: 5%"></div>
+                        <div id="bar-xiu" class="h-full bg-gradient-to-r from-blue-600 to-sky-400 transition-all duration-500" style="width: 45%"></div>
+                    </div>
+                </div>
+
+                <!-- Biểu đồ đường tổng điểm (3 - 18) SVG sắc nét -->
+                <div class="bg-black/45 border border-amber-400/25 rounded-xl p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-amber-200/80">Biểu đồ đường cầu tổng điểm (16 phiên gần nhất)</span>
+                        <span class="text-[10px] text-amber-300/60">Ngưỡng Tài ≥ 11</span>
+                    </div>
+                    <div id="roadmap-svg-wrap" class="w-full h-36 sm:h-40"></div>
+                </div>
+
+                <!-- Chi tiết các phiên gần nhất -->
+                <div>
+                    <div class="text-[11px] font-bold uppercase tracking-wider text-amber-200/80 mb-2">Lịch sử 3 xúc xắc gần nhất</div>
+                    <div id="roadmap-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* =====================================================================
+           1. TRẠNG THÁI TRÒ CHƠI (STATE) & LỊCH SỬ SOI CẦU KHỞI TẠO
+           ===================================================================== */
+        const START_BALANCE = 10000000;
+
+        const STATE = {
+            balance: START_BALANCE,
+            shownBalance: START_BALANCE,
+            selectedChip: 10000,
+            bets: { tai: 0, bao: 0, xiu: 0 },
+            lastBets: { tai: 0, bao: 0, xiu: 0 },
+            phase: 'BETTING', // 'BETTING' | 'SHAKING' | 'PEEKING' | 'REVEALING'
+            autoOpen: false,
+            allInArmed: false,
+            currentDice: [4, 5, 3],
+            roundCounter: 14,
+            history: [
+                { round: 1,  dice: [2, 3, 4], sum: 9,  outcome: 'xiu' },
+                { round: 2,  dice: [5, 4, 3], sum: 12, outcome: 'tai' },
+                { round: 3,  dice: [6, 5, 4], sum: 15, outcome: 'tai' },
+                { round: 4,  dice: [1, 2, 4], sum: 7,  outcome: 'xiu' },
+                { round: 5,  dice: [3, 3, 2], sum: 8,  outcome: 'xiu' },
+                { round: 6,  dice: [5, 5, 4], sum: 14, outcome: 'tai' },
+                { round: 7,  dice: [2, 2, 2], sum: 6,  outcome: 'bao' },
+                { round: 8,  dice: [6, 4, 3], sum: 13, outcome: 'tai' },
+                { round: 9,  dice: [1, 3, 5], sum: 9,  outcome: 'xiu' },
+                { round: 10, dice: [4, 4, 2], sum: 10, outcome: 'xiu' },
+                { round: 11, dice: [6, 6, 2], sum: 14, outcome: 'tai' },
+                { round: 12, dice: [3, 4, 5], sum: 12, outcome: 'tai' },
+                { round: 13, dice: [1, 2, 3], sum: 6,  outcome: 'xiu' },
+                { round: 14, dice: [4, 5, 3], sum: 12, outcome: 'tai' }
+            ]
+        };
+
+        /* =====================================================================
+           2. BỘ TỔNG HỢP ÂM THANH CASINO 3D (WEB AUDIO API - KHÔNG CẦN FILE NGOÀI)
+           ===================================================================== */
+        class CasinoAudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+                this.lastSlideTime = 0;
+            }
+
+            init() {
+                if (!this.enabled) return;
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume().catch(() => {});
+                }
+            }
+
+            setEnabled(val) {
+                this.enabled = Boolean(val);
+            }
+
+            playClick(freq = 760) {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, now);
+                osc.frequency.exponentialRampToValueAtTime(freq * 0.55, now + 0.055);
+                gain.gain.setValueAtTime(0.11, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.065);
+            }
+
+            playChip() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [1850, 2720].forEach((f, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f, now + idx * 0.014);
+                    osc.frequency.exponentialRampToValueAtTime(f * 0.72, now + 0.08 + idx * 0.014);
+                    gain.gain.setValueAtTime(0.09, now + idx * 0.014);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09 + idx * 0.014);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.014);
+                    osc.stop(now + 0.095 + idx * 0.014);
+                });
+            }
+
+            playBowlCover() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(240, now);
+                osc.frequency.exponentialRampToValueAtTime(85, now + 0.16);
+                gain.gain.setValueAtTime(0.22, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.18);
+            }
+
+            playDiceRattle(intensity = 0.7) {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const baseFreq = 1100 + Math.random() * 900;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(baseFreq, now);
+                osc.frequency.exponentialRampToValueAtTime(340, now + 0.038);
+                gain.gain.setValueAtTime(0.14 * intensity, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.042);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.045);
+            }
+
+            playCeramicSlide(speed = 0.5) {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                if (now - this.lastSlideTime < 0.055) return;
+                this.lastSlideTime = now;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                const f = 520 + Math.min(480, speed * 260);
+                osc.frequency.setValueAtTime(f, now);
+                osc.frequency.linearRampToValueAtTime(f * 1.12, now + 0.045);
+                gain.gain.setValueAtTime(Math.min(0.06, 0.015 + speed * 0.03), now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.055);
+            }
+
+            playReveal() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [523.25, 659.25, 783.99].forEach((f, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f, now + i * 0.045);
+                    gain.gain.setValueAtTime(0.11, now + i * 0.045);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28 + i * 0.045);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.045);
+                    osc.stop(now + 0.3 + i * 0.045);
+                });
+            }
+
+            playWin(isJackpot = false) {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const notes = isJackpot
+                    ? [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98]
+                    : [523.25, 659.25, 783.99, 1046.5];
+                notes.forEach((f, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(f, now + i * 0.065);
+                    gain.gain.setValueAtTime(0.15, now + i * 0.065);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42 + i * 0.065);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.065);
+                    osc.stop(now + 0.45 + i * 0.065);
+                });
+            }
+
+            playLose() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(290, now);
+                osc.frequency.exponentialRampToValueAtTime(165, now + 0.24);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.27);
+            }
+        }
+
+        const audio = new CasinoAudioEngine();
+
+        /* =====================================================================
+           3. HỆ THỐNG THREE.JS 3D TỐI ƯU 60FPS (LIGHTWEIGHT SHADOW, SHARED POOL,
+              LOW-POLY MINKOWSKI DICE, ON-DEMAND SHADOW UPDATE, ZERO-GC LOOP)
+           ===================================================================== */
+        let scene, camera, renderer, clock;
+        let arenaGroup, plateGroup, bowlGroup, bowlHitMesh, bowlRimMat;
+        let diceMeshes = [];
+        let bezelBeadMat;
+        let auraRingMesh, burstPoints, burstData = [];
+        let stageResizeObserver, resizeDebounceTimer = null;
+        let isPageVisible = true;
+        let lastBowlPos = new THREE.Vector3();
+
+        // Các biến dùng chung (Object Pool) tránh tạo rác bộ nhớ trong animate() & pointermove
+        const _tmpVec = new THREE.Vector3();
+        const _tmpVec2 = new THREE.Vector3();
+        const _zeroVec = new THREE.Vector3(0, 0, 0);
+        const _upVec = new THREE.Vector3(0, 1, 0);
+        const _raycaster = new THREE.Raycaster();
+        const _ndc = new THREE.Vector2();
+
+        // Trạng thái Camera Semi-Overhead (~66 độ từ phương ngang -> phi = 24 độ ~ 0.42 rad)
+        const CAM = {
+            basePhi: 0.42,      // ~66 độ nhìn từ trên xuống: nhìn thẳng xúc xắc cực rõ & giữ chiều sâu 3D
+            fov: 34,
+            radius: 19.5,
+            parallaxX: 0,
+            parallaxY: 0,
+            targetParallaxX: 0,
+            targetParallaxY: 0,
+            shakeAmp: 0
+        };
+
+        // Trạng thái Bát 3D & Kéo Nặn 1:1
+        const BOWL_CLOSED_POS = new THREE.Vector3(0, 0.35, 0);
+        const BOWL_OPEN_POS   = new THREE.Vector3(5.65, 1.55, -2.15);
+        const REVEAL_THRESHOLD = 3.95;
+
+        const BOWL = {
+            pos: BOWL_OPEN_POS.clone(),
+            targetPos: BOWL_OPEN_POS.clone(),
+            rot: new THREE.Euler(0.15, 0, -0.34),
+            targetRot: new THREE.Euler(0.15, 0, -0.34),
+            isDragging: false,
+            dragPlane: new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.35),
+            dragOffset: new THREE.Vector3(),
+            prevDragPos: new THREE.Vector3(),
+            lastVelocity: new THREE.Vector2(),
+            dragStartedAt: 0
+        };
+
+        // Hoạt ảnh xóc & thắng cược
+        let shakeElapsed = 0;
+        const SHAKE_TOTAL = 1.32;
+        let nextRattleAt = 0;
+        let winCelebrationTimer = 0;
+
+        /* ---------------------------------------------------------------------
+           ÁNH XẠ CHUẨN 100% 6 MẶT THREE.BoxGeometry (ĐỐI DIỆN CỘNG BẰNG 7)
+           index 0 (+X): 3 | index 1 (-X): 4
+           index 2 (+Y): 1 | index 3 (-Y): 6
+           index 4 (+Z): 2 | index 5 (-Z): 5
+           --------------------------------------------------------------------- */
+        const FACE_ORDER = [3, 4, 1, 6, 2, 5];
+
+        const TOP_FACE_EULER = {
+            1: new THREE.Euler(0, 0, 0, 'XYZ'),
+            6: new THREE.Euler(Math.PI, 0, 0, 'XYZ'),
+            2: new THREE.Euler(-Math.PI / 2, 0, 0, 'XYZ'),
+            5: new THREE.Euler(Math.PI / 2, 0, 0, 'XYZ'),
+            3: new THREE.Euler(0, 0, Math.PI / 2, 'XYZ'),
+            4: new THREE.Euler(0, 0, -Math.PI / 2, 'XYZ')
+        };
+
+        const FACE_NORMALS = [
+            { n: new THREE.Vector3(1, 0, 0),  v: 3 },
+            { n: new THREE.Vector3(-1, 0, 0), v: 4 },
+            { n: new THREE.Vector3(0, 1, 0),  v: 1 },
+            { n: new THREE.Vector3(0, -1, 0), v: 6 },
+            { n: new THREE.Vector3(0, 0, 1),  v: 2 },
+            { n: new THREE.Vector3(0, 0, -1), v: 5 }
+        ];
+
+        const _qFace = new THREE.Quaternion();
+        const _qYaw = new THREE.Quaternion();
+
+        /** Xoay xúc xắc sao cho mặt `val` (1..6) hướng chính xác tuyệt đối lên +Y */
+        function setDieTopFace(mesh, val, yaw) {
+            _qFace.setFromEuler(TOP_FACE_EULER[val]);
+            _qYaw.setFromAxisAngle(_upVec, yaw);
+            mesh.quaternion.copy(_qYaw).multiply(_qFace);
+        }
+
+        /** Kiểm chứng toán học trực tiếp bằng Quaternion rằng mặt hướng +Y đúng 100% */
+        function verifyDieTopFace(mesh) {
+            let bestV = 1, bestDot = -2;
+            for (let i = 0; i < FACE_NORMALS.length; i++) {
+                const d = FACE_NORMALS[i];
+                _tmpVec.copy(d.n).applyQuaternion(mesh.quaternion);
+                const dot = _tmpVec.dot(_upVec);
+                if (dot > bestDot) {
+                    bestDot = dot;
+                    bestV = d.v;
+                }
+            }
+            return bestV;
+        }
+
+        /**
+         * Tạo Geometry lập phương bo góc tròn 3D tối ưu số đỉnh (segments = 3)
+         * giữ nguyên 6 material groups và UV chuẩn của BoxGeometry để không méo chấm.
+         */
+        function createRoundedDiceGeometry(size, radius, segments = 3) {
+            const geo = new THREE.BoxGeometry(size, size, size, segments, segments, segments);
+            const pos = geo.attributes.position;
+            const norm = geo.attributes.normal;
+            const half = size * 0.5;
+            const inner = half - radius;
+            const v = new THREE.Vector3();
+            const clamped = new THREE.Vector3();
+            const diff = new THREE.Vector3();
+
+            for (let i = 0; i < pos.count; i++) {
+                v.fromBufferAttribute(pos, i);
+                clamped.set(
+                    THREE.MathUtils.clamp(v.x, -inner, inner),
+                    THREE.MathUtils.clamp(v.y, -inner, inner),
+                    THREE.MathUtils.clamp(v.z, -inner, inner)
+                );
+                diff.subVectors(v, clamped);
+                const len = diff.length();
+                if (len > 1e-6) {
+                    diff.divideScalar(len);
+                    pos.setXYZ(
+                        i,
+                        clamped.x + diff.x * radius,
+                        clamped.y + diff.y * radius,
+                        clamped.z + diff.z * radius
+                    );
+                    norm.setXYZ(i, diff.x, diff.y, diff.z);
+                }
+            }
+            pos.needsUpdate = true;
+            norm.needsUpdate = true;
+            return geo;
+        }
+
+        /** Tạo bản đồ màu & bump nhẹ 256x256 tối ưu VRAM cho từng mặt xúc xắc */
+        function createDiceFaceMaps(value) {
+            const S = 256;
+            const colorCanvas = document.createElement('canvas');
+            const bumpCanvas = document.createElement('canvas');
+            colorCanvas.width = bumpCanvas.width = S;
+            colorCanvas.height = bumpCanvas.height = S;
+
+            const cCtx = colorCanvas.getContext('2d');
+            const bCtx = bumpCanvas.getContext('2d');
+
+            // 1. Nền ngà voi sang trọng
+            const ivory = cCtx.createRadialGradient(S * 0.44, S * 0.40, 10, S * 0.5, S * 0.5, S * 0.75);
+            ivory.addColorStop(0, '#fffefb');
+            ivory.addColorStop(0.75, '#f8f2e4');
+            ivory.addColorStop(1, '#dfd2b8');
+            cCtx.fillStyle = ivory;
+            cCtx.fillRect(0, 0, S, S);
+
+            bCtx.fillStyle = '#ffffff';
+            bCtx.fillRect(0, 0, S, S);
+
+            const c = S / 2;
+            const d = S * 0.245;
+            const pips = {
+                1: [[c, c]],
+                2: [[c - d, c - d], [c + d, c + d]],
+                3: [[c - d, c - d], [c, c], [c + d, c + d]],
+                4: [[c - d, c - d], [c + d, c - d], [c - d, c + d], [c + d, c + d]],
+                5: [[c - d, c - d], [c + d, c - d], [c, c], [c - d, c + d], [c + d, c + d]],
+                6: [
+                    [c - d, c - d], [c + d, c - d],
+                    [c - d, c],     [c + d, c],
+                    [c - d, c + d], [c + d, c + d]
+                ]
+            };
+
+            const isRed = (value === 1 || value === 4);
+            const rPip = value === 1 ? 41 : 23.5;
+
+            pips[value].forEach(([px, py]) => {
+                // Bump map: vết khoét bán cầu lõm
+                const bGrad = bCtx.createRadialGradient(px, py, 1, px, py, rPip * 1.12);
+                bGrad.addColorStop(0, '#101010');
+                bGrad.addColorStop(0.75, '#555555');
+                bGrad.addColorStop(1, '#ffffff');
+                bCtx.fillStyle = bGrad;
+                bCtx.beginPath();
+                bCtx.arc(px, py, rPip * 1.12, 0, Math.PI * 2);
+                bCtx.fill();
+
+                // Viền lõm đổ bóng nhẹ
+                const rim = cCtx.createRadialGradient(px + 2, py + 2, rPip * 0.4, px, py, rPip * 1.14);
+                rim.addColorStop(0, 'rgba(0,0,0,0.32)');
+                rim.addColorStop(0.82, 'rgba(0,0,0,0.08)');
+                rim.addColorStop(1, 'rgba(255,255,255,0.0)');
+                cCtx.fillStyle = rim;
+                cCtx.beginPath();
+                cCtx.arc(px, py, rPip * 1.14, 0, Math.PI * 2);
+                cCtx.fill();
+
+                const fill = cCtx.createRadialGradient(px - rPip * 0.28, py - rPip * 0.28, rPip * 0.08, px, py, rPip);
+                if (isRed) {
+                    fill.addColorStop(0, '#ff4d57');
+                    fill.addColorStop(0.5, '#cc101c');
+                    fill.addColorStop(1, '#6e050b');
+                } else {
+                    fill.addColorStop(0, '#3e4756');
+                    fill.addColorStop(0.45, '#11161f');
+                    fill.addColorStop(1, '#020408');
+                }
+                cCtx.fillStyle = fill;
+                cCtx.beginPath();
+                cCtx.arc(px, py, rPip, 0, Math.PI * 2);
+                cCtx.fill();
+
+                if (value === 1) {
+                    cCtx.strokeStyle = 'rgba(255, 215, 130, 0.35)';
+                    cCtx.lineWidth = 2;
+                    cCtx.beginPath();
+                    cCtx.arc(px, py, rPip * 1.12, 0, Math.PI * 2);
+                    cCtx.stroke();
+                }
+
+                cCtx.fillStyle = 'rgba(255, 255, 255, 0.24)';
+                cCtx.beginPath();
+                cCtx.arc(px - rPip * 0.3, py - rPip * 0.3, rPip * 0.18, 0, Math.PI * 2);
+                cCtx.fill();
+            });
+
+            const map = new THREE.CanvasTexture(colorCanvas);
+            map.encoding = THREE.sRGBEncoding;
+            map.anisotropy = 2;
+
+            const bumpMap = new THREE.CanvasTexture(bumpCanvas);
+            bumpMap.anisotropy = 2;
+
+            return { map, bumpMap };
+        }
+
+        /** Tạo mặt bàn nhung xanh ngọc lục bảo hoàng gia 512x512 tối ưu GPU */
+        function createVIPTableMaps() {
+            const S = 512;
+            const cCanvas = document.createElement('canvas');
+            cCanvas.width = S;
+            cCanvas.height = S;
+            const ctx = cCanvas.getContext('2d');
+
+            const bg = ctx.createRadialGradient(S / 2, S / 2, 30, S / 2, S / 2, S * 0.56);
+            bg.addColorStop(0, '#0d543c');
+            bg.addColorStop(0.38, '#063122');
+            bg.addColorStop(0.75, '#041a13');
+            bg.addColorStop(1, '#030c09');
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, S, S);
+
+            // Hạt sợi vải nhung nhẹ
+            for (let i = 0; i < 4500; i++) {
+                const x = Math.random() * S;
+                const y = Math.random() * S;
+                ctx.fillStyle = `rgba(255, 245, 210, ${Math.random() * 0.038})`;
+                ctx.fillRect(x, y, 2, 2);
+            }
+
+            const cx = S / 2, cy = S / 2;
+            const drawGoldRing = (r, lw, alpha, dash = []) => {
+                ctx.save();
+                ctx.strokeStyle = `rgba(232, 188, 82, ${alpha})`;
+                ctx.lineWidth = lw;
+                ctx.setLineDash(dash);
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            };
+
+            drawGoldRing(98, 2.5, 0.55);
+            drawGoldRing(106, 1.5, 0.36, [6, 5]);
+            drawGoldRing(128, 2, 0.30);
+            drawGoldRing(162, 1.5, 0.18, [10, 7]);
+
+            ctx.strokeStyle = 'rgba(232, 188, 82, 0.28)';
+            ctx.lineWidth = 1.5;
+            for (let i = 0; i < 16; i++) {
+                const ang = (i / 16) * Math.PI * 2;
+                const x1 = cx + Math.cos(ang) * 106;
+                const y1 = cy + Math.sin(ang) * 106;
+                const x2 = cx + Math.cos(ang) * 127;
+                const y2 = cy + Math.sin(ang) * 127;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+
+                ctx.fillStyle = 'rgba(246, 206, 102, 0.45)';
+                ctx.beginPath();
+                ctx.arc(x2, y2, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            const map = new THREE.CanvasTexture(cCanvas);
+            map.encoding = THREE.sRGBEncoding;
+            map.anisotropy = 2;
+            return { map };
+        }
+
+        /** Tạo texture đĩa sứ trắng ngọc trai họa tiết mây sen vàng kim & xanh cổ điển (512x256) */
+        function createRoyalPlateTexture() {
+            const W = 512, H = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = W;
+            canvas.height = H;
+            const ctx = canvas.getContext('2d');
+
+            const g = ctx.createLinearGradient(0, 0, 0, H);
+            g.addColorStop(0, '#fcfbf7');
+            g.addColorStop(0.7, '#f5f2ea');
+            g.addColorStop(1, '#ece6d8');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, H);
+
+            ctx.fillStyle = '#d4a637';
+            ctx.fillRect(0, H * 0.34, W, 6);
+            ctx.fillRect(0, H * 0.58, W, 8);
+
+            ctx.fillStyle = '#153b6e';
+            ctx.fillRect(0, H * 0.37, W, 4);
+            ctx.fillRect(0, H * 0.54, W, 4);
+
+            const count = 24;
+            const seg = W / count;
+            for (let i = 0; i < count; i++) {
+                const mx = i * seg + seg / 2;
+                ctx.strokeStyle = '#1d4d8f';
+                ctx.lineWidth = 1.8;
+                ctx.beginPath();
+                ctx.arc(mx, H * 0.46, seg * 0.36, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.fillStyle = '#d9a734';
+                ctx.beginPath();
+                ctx.moveTo(mx, H * 0.40);
+                ctx.lineTo(mx + seg * 0.22, H * 0.46);
+                ctx.lineTo(mx, H * 0.52);
+                ctx.lineTo(mx - seg * 0.22, H * 0.46);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.encoding = THREE.sRGBEncoding;
+            tex.anisotropy = 2;
+            return tex;
+        }
+
+        /** Tạo texture lớp lót nhung đỏ thẫm trong lòng đĩa (256x256) */
+        function createCrimsonVelvetTexture() {
+            const S = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = S;
+            canvas.height = S;
+            const ctx = canvas.getContext('2d');
+
+            const g = ctx.createRadialGradient(S / 2, S / 2, 10, S / 2, S / 2, S * 0.52);
+            g.addColorStop(0, '#851122');
+            g.addColorStop(0.68, '#520914');
+            g.addColorStop(1, '#290309');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, S, S);
+
+            for (let i = 0; i < 2200; i++) {
+                ctx.fillStyle = `rgba(255, 210, 180, ${Math.random() * 0.035})`;
+                ctx.fillRect(Math.random() * S, Math.random() * S, 2, 2);
+            }
+
+            ctx.strokeStyle = 'rgba(235, 190, 82, 0.58)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(S / 2, S / 2, S * 0.465, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = 'rgba(235, 190, 82, 0.24)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.arc(S / 2, S / 2, S * 0.42, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.encoding = THREE.sRGBEncoding;
+            tex.anisotropy = 2;
+            return tex;
+        }
+
+        /** Tạo bản đồ cho Bát Sơn Mài Khảm Vàng Rồng Mây (512x256 tối ưu VRAM) */
+        function createLacquerBowlMaps() {
+            const W = 512, H = 256;
+            const cCan = document.createElement('canvas');
+            const bCan = document.createElement('canvas');
+            cCan.width = bCan.width = W;
+            cCan.height = bCan.height = H;
+
+            const cCtx = cCan.getContext('2d');
+            const bCtx = bCan.getContext('2d');
+
+            const grad = cCtx.createLinearGradient(0, 0, 0, H);
+            grad.addColorStop(0.0, '#160205');
+            grad.addColorStop(0.20, '#440710');
+            grad.addColorStop(0.55, '#7c0f1f');
+            grad.addColorStop(0.84, '#2c050a');
+            grad.addColorStop(1.0, '#120204');
+            cCtx.fillStyle = grad;
+            cCtx.fillRect(0, 0, W, H);
+
+            bCtx.fillStyle = '#404040';
+            bCtx.fillRect(0, 0, W, H);
+
+            const drawGoldDetail = (drawFn) => {
+                cCtx.save();
+                bCtx.save();
+                drawFn(cCtx, '#f0c453', '#fef08a');
+                drawFn(bCtx, '#f0f0f0', '#ffffff');
+                cCtx.restore();
+                bCtx.restore();
+            };
+
+            drawGoldDetail((ctx, col1, col2) => {
+                ctx.fillStyle = col1;
+                ctx.fillRect(0, 10, W, 6);
+                ctx.fillRect(0, H - 36, W, 5);
+                ctx.fillStyle = col2;
+                ctx.fillRect(0, 19, W, 2);
+                ctx.fillRect(0, H - 28, W, 2);
+
+                ctx.strokeStyle = col1;
+                ctx.lineWidth = 2;
+                const fretCount = 32;
+                const fw = W / fretCount;
+                for (let i = 0; i < fretCount; i++) {
+                    const x = i * fw;
+                    ctx.strokeRect(x + 2, 26, fw - 4, 11);
+                    ctx.strokeRect(x + 5, 29, fw - 10, 5);
+                }
+
+                const motifs = 12;
+                const seg = W / motifs;
+                for (let i = 0; i < motifs; i++) {
+                    const mx = i * seg + seg / 2;
+                    ctx.strokeStyle = col1;
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.moveTo(mx - seg * 0.42, H * 0.64);
+                    ctx.quadraticCurveTo(mx, H * 0.20, mx + seg * 0.42, H * 0.64);
+                    ctx.quadraticCurveTo(mx, H * 0.80, mx - seg * 0.42, H * 0.64);
+                    ctx.stroke();
+
+                    ctx.strokeStyle = col2;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(mx, H * 0.52, seg * 0.16, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.fillStyle = col2;
+                    ctx.beginPath();
+                    ctx.arc(mx, H * 0.52, 3, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = col1;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(mx - seg * 0.2, H * 0.26, seg * 0.18, Math.PI, 0);
+                    ctx.arc(mx + seg * 0.2, H * 0.26, seg * 0.18, Math.PI, 0);
+                    ctx.stroke();
+                }
+            });
+
+            const map = new THREE.CanvasTexture(cCan);
+            map.wrapS = THREE.RepeatWrapping;
+            map.encoding = THREE.sRGBEncoding;
+            map.anisotropy = 2;
+
+            const bumpMap = new THREE.CanvasTexture(bCan);
+            bumpMap.wrapS = THREE.RepeatWrapping;
+
+            return { map, bumpMap };
+        }
+
+        /** Tạo texture hạt sáng tròn phát quang nhẹ */
+        function createRadialGlowTexture(innerHex, midHex) {
+            const S = 64;
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = S;
+            const ctx = canvas.getContext('2d');
+            const g = ctx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+            g.addColorStop(0, innerHex);
+            g.addColorStop(0.35, midHex);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, S, S);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.encoding = THREE.sRGBEncoding;
+            return tex;
+        }
+
+        /** Yêu cầu cập nhật Shadow Map đúng lúc cần thiết (tiết kiệm tối đa GPU) */
+        function requestShadowUpdate() {
+            if (renderer && renderer.shadowMap) {
+                renderer.shadowMap.needsUpdate = true;
+            }
+        }
+
+        /** Khởi tạo toàn bộ thế giới 3D tối ưu 60 FPS */
+        function init3D() {
+            const container = document.getElementById('three-container');
+            clock = new THREE.Clock();
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x040d0a);
+
+            camera = new THREE.PerspectiveCamera(CAM.fov, window.innerWidth / window.innerHeight, 0.1, 100);
+
+            const dpr = window.devicePixelRatio || 1;
+            renderer = new THREE.WebGLRenderer({
+                antialias: dpr <= 1.2,
+                powerPreference: 'high-performance',
+                stencil: false
+            });
+            renderer.setPixelRatio(Math.min(dpr, 1.5));
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.15;
+
+            // Tối ưu Shadow Map: 1024x1024 và chỉ cập nhật theo sự kiện (On-Demand)
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.shadowMap.autoUpdate = false;
+            renderer.shadowMap.needsUpdate = true;
+            container.appendChild(renderer.domElement);
+
+            // Hệ thống ánh sáng gọn nhẹ (1 DirectionalLight đổ bóng + HemisphereLight + PointLight nhẹ)
+            const hemi = new THREE.HemisphereLight(0xfff6dd, 0x082a1e, 0.85);
+            scene.add(hemi);
+
+            const dirLight = new THREE.DirectionalLight(0xfff2d2, 1.35);
+            dirLight.position.set(3.5, 14.0, 4.5);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.near = 4;
+            dirLight.shadow.camera.far = 26;
+            const dCam = 7.5;
+            dirLight.shadow.camera.left = -dCam;
+            dirLight.shadow.camera.right = dCam;
+            dirLight.shadow.camera.top = dCam;
+            dirLight.shadow.camera.bottom = -dCam;
+            dirLight.shadow.bias = -0.0006;
+            scene.add(dirLight);
+
+            const warmAccent = new THREE.PointLight(0xffbe45, 0.85, 24);
+            warmAccent.position.set(-5.5, 6.5, -4.5);
+            scene.add(warmAccent);
+
+            // Cụm sân khấu trung tâm
+            arenaGroup = new THREE.Group();
+            scene.add(arenaGroup);
+
+            buildVIPTableAndBezel();
+
+            plateGroup = new THREE.Group();
+            arenaGroup.add(plateGroup);
+
+            buildPorcelainPlate();
+            buildRoundedDice();
+            buildLacquerBowl();
+            buildSparkleEffects();
+
+            // Sắp xếp 3 viên xúc xắc khớp với phiên mẫu mở sẵn
+            placeDiceOnPlate(STATE.currentDice);
+            requestShadowUpdate();
+
+            // Tự căn tâm Camera & tỷ lệ sân khấu theo #stage-anchor
+            syncCameraToStage();
+            stageResizeObserver = new ResizeObserver(() => {
+                clearTimeout(resizeDebounceTimer);
+                resizeDebounceTimer = setTimeout(syncCameraToStage, 40);
+            });
+            stageResizeObserver.observe(document.getElementById('stage-anchor'));
+            window.addEventListener('resize', onWindowResize);
+
+            // Tạm dừng render khi tab bị ẩn để tiết kiệm pin & CPU/GPU
+            document.addEventListener('visibilitychange', () => {
+                isPageVisible = document.visibilityState === 'visible';
+                if (isPageVisible && clock) {
+                    clock.getDelta();
+                }
+            });
+
+            // Gắn tương tác kéo nặn bát 1:1 & parallax nhẹ trên desktop
+            setupPointerInteractions(renderer.domElement);
+        }
+
+        /** Xây dựng mặt bàn nhung xanh ngọc + vành bezel vàng kim đính 12 hạt đèn dùng chung material */
+        function buildVIPTableAndBezel() {
+            const { map } = createVIPTableMaps();
+            const tableMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(48, 48),
+                new THREE.MeshStandardMaterial({
+                    map,
+                    roughness: 0.78,
+                    metalness: 0.08
+                })
+            );
+            tableMesh.rotation.x = -Math.PI / 2;
+            tableMesh.position.y = 0;
+            tableMesh.receiveShadow = true;
+            scene.add(tableMesh);
+
+            const goldMetal = new THREE.MeshStandardMaterial({
+                color: 0xf4cc62,
+                emissive: new THREE.Color(0x5c3a04),
+                emissiveIntensity: 0.25,
+                roughness: 0.24,
+                metalness: 0.85
+            });
+            const darkGoldMetal = new THREE.MeshStandardMaterial({
+                color: 0x7c5210,
+                roughness: 0.35,
+                metalness: 0.78
+            });
+
+            const outerBezel = new THREE.Mesh(new THREE.TorusGeometry(4.02, 0.13, 12, 48), goldMetal);
+            outerBezel.rotation.x = Math.PI / 2;
+            outerBezel.position.y = 0.08;
+            outerBezel.receiveShadow = true;
+            arenaGroup.add(outerBezel);
+
+            const innerBezel = new THREE.Mesh(new THREE.TorusGeometry(3.74, 0.06, 10, 48), darkGoldMetal);
+            innerBezel.rotation.x = Math.PI / 2;
+            innerBezel.position.y = 0.05;
+            arenaGroup.add(innerBezel);
+
+            // 12 hạt đèn ánh kim dùng chung 1 geometry & 1 material (cập nhật 1 lần/frame)
+            const beadGeo = new THREE.SphereGeometry(0.09, 10, 8);
+            bezelBeadMat = new THREE.MeshStandardMaterial({
+                color: 0xfff3c4,
+                emissive: new THREE.Color(0xf59e0b),
+                emissiveIntensity: 0.65,
+                roughness: 0.2,
+                metalness: 0.35
+            });
+            const count = 12;
+            for (let i = 0; i < count; i++) {
+                const ang = (i / count) * Math.PI * 2;
+                const bead = new THREE.Mesh(beadGeo, bezelBeadMat);
+                bead.position.set(Math.cos(ang) * 4.02, 0.19, Math.sin(ang) * 4.02);
+                arenaGroup.add(bead);
+            }
+        }
+
+        /** Xây dựng Đĩa Sứ Hoàng Gia (36 phân đoạn mượt mà & nhẹ đỉnh) */
+        function buildPorcelainPlate() {
+            const pts = [
+                new THREE.Vector2(0.0, 0.04),
+                new THREE.Vector2(2.15, 0.04),
+                new THREE.Vector2(2.38, 0.12),
+                new THREE.Vector2(3.25, 0.46),
+                new THREE.Vector2(3.48, 0.52),
+                new THREE.Vector2(3.56, 0.44),
+                new THREE.Vector2(3.32, 0.25),
+                new THREE.Vector2(2.42, 0.02),
+                new THREE.Vector2(2.25, 0.0),
+                new THREE.Vector2(0.0, 0.0)
+            ];
+            const geo = new THREE.LatheGeometry(pts, 36);
+            const plateMat = new THREE.MeshStandardMaterial({
+                map: createRoyalPlateTexture(),
+                roughness: 0.18,
+                metalness: 0.08
+            });
+            const plateMesh = new THREE.Mesh(geo, plateMat);
+            plateMesh.castShadow = true;
+            plateMesh.receiveShadow = true;
+            plateGroup.add(plateMesh);
+
+            // Lớp lót nhung đỏ thẫm
+            const velvetDisc = new THREE.Mesh(
+                new THREE.CylinderGeometry(2.24, 2.24, 0.08, 36),
+                new THREE.MeshStandardMaterial({
+                    map: createCrimsonVelvetTexture(),
+                    roughness: 0.90,
+                    metalness: 0.05
+                })
+            );
+            velvetDisc.position.y = 0.10;
+            velvetDisc.receiveShadow = true;
+            plateGroup.add(velvetDisc);
+
+            const goldMat = new THREE.MeshStandardMaterial({
+                color: 0xf4cc64,
+                roughness: 0.22,
+                metalness: 0.88
+            });
+            const outerRim = new THREE.Mesh(new THREE.TorusGeometry(3.50, 0.045, 10, 40), goldMat);
+            outerRim.rotation.x = Math.PI / 2;
+            outerRim.position.y = 0.49;
+            plateGroup.add(outerRim);
+
+            const innerTrim = new THREE.Mesh(new THREE.TorusGeometry(2.24, 0.032, 10, 36), goldMat);
+            innerTrim.rotation.x = Math.PI / 2;
+            innerTrim.position.y = 0.14;
+            plateGroup.add(innerTrim);
+        }
+
+        /** Xây dựng 3 viên xúc xắc bo góc tròn 3D dùng chung 1 geometry & 1 mảng 6 material */
+        function buildRoundedDice() {
+            const dieSize = 0.88;
+            const dieGeo = createRoundedDiceGeometry(dieSize, 0.125, 3);
+
+            const faceMaterials = FACE_ORDER.map(val => {
+                const maps = createDiceFaceMaps(val);
+                return new THREE.MeshStandardMaterial({
+                    map: maps.map,
+                    bumpMap: maps.bumpMap,
+                    bumpScale: 0.02,
+                    roughness: 0.24,
+                    metalness: 0.05
+                });
+            });
+
+            diceMeshes = [];
+            for (let i = 0; i < 3; i++) {
+                const die = new THREE.Mesh(dieGeo, faceMaterials);
+                die.castShadow = true;
+                die.receiveShadow = true;
+                die.position.y = 0.14 + dieSize * 0.5;
+                plateGroup.add(die);
+                diceMeshes.push(die);
+            }
+        }
+
+        /** Sắp xếp 3 viên xúc xắc hoàn toàn không đè nhau & kiểm chứng 100% mặt ngửa */
+        function placeDiceOnPlate(values) {
+            const dieSize = 0.88;
+            const minDist = 1.30;
+            const maxR = 1.48;
+            const pts = [];
+
+            for (let i = 0; i < 3; i++) {
+                let placed = false;
+                for (let tries = 0; tries < 60; tries++) {
+                    const ang = i * ((Math.PI * 2) / 3) + (Math.random() - 0.5) * 1.1;
+                    const r = 0.68 + Math.random() * (maxR - 0.68);
+                    const x = Math.cos(ang) * r;
+                    const z = Math.sin(ang) * r;
+                    let ok = true;
+                    for (const p of pts) {
+                        if (Math.hypot(p.x - x, p.z - z) < minDist) {
+                            ok = false;
+                            break;
+                        }
+                    }
+                    if (ok) {
+                        pts.push({ x, z });
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) {
+                    const a = i * ((Math.PI * 2) / 3) + 0.35;
+                    pts.push({ x: Math.cos(a) * 0.96, z: Math.sin(a) * 0.96 });
+                }
+            }
+
+            for (let i = 0; i < 3; i++) {
+                const die = diceMeshes[i];
+                die.position.set(pts[i].x, 0.14 + dieSize * 0.5, pts[i].z);
+                setDieTopFace(die, values[i], Math.random() * Math.PI * 2);
+                if (verifyDieTopFace(die) !== values[i]) {
+                    setDieTopFace(die, values[i], 0);
+                }
+            }
+            requestShadowUpdate();
+        }
+
+        /** Xây dựng Bát Sơn Mài Khảm Vàng (36 phân đoạn tối ưu) kèm núm đài sen */
+        function buildLacquerBowl() {
+            bowlGroup = new THREE.Group();
+
+            const pts = [
+                new THREE.Vector2(2.68, 0.0),
+                new THREE.Vector2(2.62, 0.42),
+                new THREE.Vector2(2.40, 1.06),
+                new THREE.Vector2(1.94, 1.72),
+                new THREE.Vector2(1.26, 2.22),
+                new THREE.Vector2(0.56, 2.44),
+                new THREE.Vector2(0.0, 2.50)
+            ];
+            const bowlGeo = new THREE.LatheGeometry(pts, 36);
+            const maps = createLacquerBowlMaps();
+
+            const outerMat = new THREE.MeshStandardMaterial({
+                map: maps.map,
+                bumpMap: maps.bumpMap,
+                bumpScale: 0.018,
+                roughness: 0.24,
+                metalness: 0.32,
+                side: THREE.FrontSide
+            });
+            const outerMesh = new THREE.Mesh(bowlGeo, outerMat);
+            outerMesh.castShadow = true;
+            outerMesh.receiveShadow = true;
+            bowlGroup.add(outerMesh);
+
+            const innerMesh = new THREE.Mesh(
+                bowlGeo,
+                new THREE.MeshStandardMaterial({
+                    color: 0x260408,
+                    roughness: 0.4,
+                    metalness: 0.08,
+                    side: THREE.BackSide
+                })
+            );
+            bowlGroup.add(innerMesh);
+
+            bowlRimMat = new THREE.MeshStandardMaterial({
+                color: 0xf4cc62,
+                emissive: new THREE.Color(0xd97706),
+                emissiveIntensity: 0.12,
+                roughness: 0.2,
+                metalness: 0.88
+            });
+            const lipRing = new THREE.Mesh(new THREE.TorusGeometry(2.67, 0.055, 10, 36), bowlRimMat);
+            lipRing.rotation.x = Math.PI / 2;
+            lipRing.position.y = 0.04;
+            bowlGroup.add(lipRing);
+
+            const goldMetal = new THREE.MeshStandardMaterial({
+                color: 0xf7cf65,
+                roughness: 0.2,
+                metalness: 0.90
+            });
+
+            const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.84, 0.98, 0.22, 24), outerMat);
+            pedestal.position.y = 2.55;
+            pedestal.castShadow = true;
+            bowlGroup.add(pedestal);
+
+            const collarRing = new THREE.Mesh(new THREE.TorusGeometry(0.88, 0.055, 10, 24), goldMetal);
+            collarRing.rotation.x = Math.PI / 2;
+            collarRing.position.y = 2.66;
+            bowlGroup.add(collarRing);
+
+            const petalGeo = new THREE.ConeGeometry(0.18, 0.34, 6);
+            for (let i = 0; i < 8; i++) {
+                const a = (i / 8) * Math.PI * 2;
+                const petal = new THREE.Mesh(petalGeo, goldMetal);
+                petal.position.set(Math.cos(a) * 0.42, 2.74, Math.sin(a) * 0.42);
+                petal.rotation.z = -Math.cos(a) * 0.55;
+                petal.rotation.x = Math.sin(a) * 0.55;
+                bowlGroup.add(petal);
+            }
+
+            const knobNeck = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.28, 0.26, 16), goldMetal);
+            knobNeck.position.y = 2.78;
+            bowlGroup.add(knobNeck);
+
+            const finialOrb = new THREE.Mesh(new THREE.SphereGeometry(0.32, 18, 14), goldMetal);
+            finialOrb.position.y = 3.02;
+            finialOrb.castShadow = true;
+            bowlGroup.add(finialOrb);
+
+            // Khối bắt va chạm tối ưu cho cảm ứng & chuột
+            bowlHitMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(2.95, 12, 10),
+                new THREE.MeshBasicMaterial({ visible: false })
+            );
+            bowlHitMesh.position.y = 1.25;
+            bowlGroup.add(bowlHitMesh);
+
+            bowlGroup.position.copy(BOWL.pos);
+            bowlGroup.rotation.copy(BOWL.rot);
+            lastBowlPos.copy(BOWL.pos);
+            plateGroup.add(bowlGroup);
+        }
+
+        /** Xây dựng hiệu ứng ánh sáng nhẹ: Vòng hào quang & Pool 24 hạt kim tuyến khi thắng */
+        function buildSparkleEffects() {
+            const aCan = document.createElement('canvas');
+            aCan.width = aCan.height = 256;
+            const aCtx = aCan.getContext('2d');
+            const ag = aCtx.createRadialGradient(128, 128, 72, 128, 128, 125);
+            ag.addColorStop(0.0, 'rgba(255, 230, 120, 0)');
+            ag.addColorStop(0.45, 'rgba(255, 224, 115, 0.85)');
+            ag.addColorStop(0.72, 'rgba(245, 158, 11, 0.55)');
+            ag.addColorStop(1.0, 'rgba(245, 158, 11, 0)');
+            aCtx.fillStyle = ag;
+            aCtx.fillRect(0, 0, 256, 256);
+            const ringTex = new THREE.CanvasTexture(aCan);
+            ringTex.encoding = THREE.sRGBEncoding;
+
+            auraRingMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(11.6, 11.6),
+                new THREE.MeshBasicMaterial({
+                    map: ringTex,
+                    transparent: true,
+                    opacity: 0.0,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                })
+            );
+            auraRingMesh.rotation.x = -Math.PI / 2;
+            auraRingMesh.position.y = 0.03;
+            arenaGroup.add(auraRingMesh);
+
+            // Object Pool 24 mảnh pháo kim tuyến 3D nhẹ (không cấp phát mới khi nổ)
+            const burstCount = 24;
+            const burstPos = new Float32Array(burstCount * 3);
+            const burstCols = new Float32Array(burstCount * 3);
+            const palette = [
+                new THREE.Color(0xfff4a3),
+                new THREE.Color(0xfacc15),
+                new THREE.Color(0xf59e0b),
+                new THREE.Color(0xfb7185),
+                new THREE.Color(0x60a5fa)
+            ];
+            for (let i = 0; i < burstCount; i++) {
+                burstPos[i * 3 + 1] = -20;
+                const c = palette[i % palette.length];
+                burstCols[i * 3] = c.r;
+                burstCols[i * 3 + 1] = c.g;
+                burstCols[i * 3 + 2] = c.b;
+                burstData.push({ vx: 0, vy: 0, vz: 0, life: 0 });
+            }
+            const burstGeo = new THREE.BufferGeometry();
+            burstGeo.setAttribute('position', new THREE.BufferAttribute(burstPos, 3));
+            burstGeo.setAttribute('color', new THREE.BufferAttribute(burstCols, 3));
+
+            burstPoints = new THREE.Points(
+                burstGeo,
+                new THREE.PointsMaterial({
+                    size: 0.48,
+                    map: createRadialGlowTexture('rgba(255,255,255,1)', 'rgba(255,220,120,0.65)'),
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 0.95,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                })
+            );
+            burstPoints.visible = false;
+            scene.add(burstPoints);
+        }
+
+        /** Kích hoạt vụ nổ pháo kim tuyến 3D từ object pool 24 hạt */
+        function trigger3DWinBurst(isJackpot = false) {
+            const posAttr = burstPoints.geometry.attributes.position;
+            const count = isJackpot ? 24 : 16;
+            for (let i = 0; i < burstData.length; i++) {
+                if (i < count) {
+                    const ang = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+                    const r = 0.7 + Math.random() * 2.2;
+                    const speed = (isJackpot ? 4.4 : 3.2) + Math.random() * 2.8;
+                    posAttr.setXYZ(i, Math.cos(ang) * r, 0.35 + Math.random() * 0.35, Math.sin(ang) * r);
+                    burstData[i].vx = Math.cos(ang) * speed * 0.8;
+                    burstData[i].vy = 4.4 + Math.random() * (isJackpot ? 5.2 : 3.8);
+                    burstData[i].vz = Math.sin(ang) * speed * 0.8;
+                    burstData[i].life = 1.05 + Math.random() * 0.55;
+                } else {
+                    burstData[i].life = 0;
+                    posAttr.setXYZ(i, 0, -20, 0);
+                }
+            }
+            posAttr.needsUpdate = true;
+            burstPoints.visible = true;
+        }
+
+        /* =====================================================================
+           4. TỰ ĐỘNG CĂN TÂM CAMERA & TỶ LỆ BÁT ĐĨA THEO #stage-anchor
+           (KHÔNG DÙNG setViewOffset GÂY LỖI FRUSTUM CULLING TRÊN THREE.JS r128)
+           ===================================================================== */
+        const CAM_TARGET = new THREE.Vector3(0, 0.25, 0);
+
+        function syncCameraToStage() {
+            if (!camera || !renderer) return;
+            const fullW = window.innerWidth;
+            const fullH = window.innerHeight;
+            const anchor = document.getElementById('stage-anchor');
+            if (!anchor) return;
+
+            const rect = anchor.getBoundingClientRect();
+            const anchorW = Math.max(180, rect.width);
+            const anchorH = Math.max(160, rect.height);
+
+            const centerX = rect.left + rect.width * 0.5;
+            const centerY = rect.top + rect.height * 0.52;
+
+            camera.clearViewOffset();
+            camera.aspect = fullW / fullH;
+            camera.fov = CAM.fov;
+
+            const arenaWorldSpan = fullW < 900 ? 9.4 : 9.8;
+            const usablePx = Math.min(anchorW * 0.92, anchorH * 0.90);
+            const desiredVisH = fullH * (arenaWorldSpan / Math.max(150, usablePx));
+            const tanHalfFov = Math.tan(THREE.MathUtils.degToRad(CAM.fov * 0.5));
+            CAM.radius = THREE.MathUtils.clamp(desiredVisH / (2 * tanHalfFov), 13.5, 42.0);
+
+            // Dịch chuyển điểm nhìn camera trong không gian thế giới để đưa sân khấu 3D vào đúng tâm #stage-anchor
+            const ndcOffsetX = (centerX - fullW * 0.5) / (fullW * 0.5);
+            const ndcOffsetY = (centerY - fullH * 0.5) / (fullH * 0.5);
+            const worldH = 2 * CAM.radius * tanHalfFov;
+            const worldW = worldH * camera.aspect;
+
+            CAM_TARGET.set(
+                -ndcOffsetX * (worldW * 0.5),
+                0.25,
+                -ndcOffsetY * (worldH * 0.5) / Math.cos(CAM.basePhi)
+            );
+
+            camera.updateProjectionMatrix();
+        }
+
+        function onWindowResize() {
+            clearTimeout(resizeDebounceTimer);
+            resizeDebounceTimer = setTimeout(() => {
+                if (!renderer) return;
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                syncCameraToStage();
+            }, 60);
+        }
+
+        /* =====================================================================
+           5. TƯƠNG TÁC KÉO NẶN BÁT 360 ĐỘ 1:1 (ZERO-GC POINTER HANDLERS)
+           ===================================================================== */
+        function setupPointerInteractions(domEl) {
+            const getClientXY = (e) => {
+                if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                if (e.changedTouches && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+                return { x: e.clientX, y: e.clientY };
+            };
+
+            const setNDCFromClient = (cx, cy) => {
+                const r = domEl.getBoundingClientRect();
+                _ndc.x = ((cx - r.left) / r.width) * 2 - 1;
+                _ndc.y = -((cy - r.top) / r.height) * 2 + 1;
+            };
+
+            const onDown = (e) => {
+                audio.init();
+                if (STATE.phase !== 'PEEKING') return;
+
+                const { x, y } = getClientXY(e);
+                setNDCFromClient(x, y);
+                _raycaster.setFromCamera(_ndc, camera);
+
+                const hits = _raycaster.intersectObject(bowlHitMesh, false);
+                if (hits.length > 0) {
+                    BOWL.isDragging = true;
+                    BOWL.dragStartedAt = performance.now();
+                    BOWL.lastVelocity.set(0, 0);
+
+                    if (_raycaster.ray.intersectPlane(BOWL.dragPlane, _tmpVec)) {
+                        BOWL.dragOffset.subVectors(BOWL.pos, _tmpVec);
+                    }
+                    BOWL.prevDragPos.copy(BOWL.pos);
+                    domEl.style.cursor = 'grabbing';
+                    if (e.cancelable) e.preventDefault();
+                }
+            };
+
+            const onMove = (e) => {
+                const { x, y } = getClientXY(e);
+                setNDCFromClient(x, y);
+
+                if (!BOWL.isDragging && (!e.touches || e.touches.length === 0)) {
+                    CAM.targetParallaxX = THREE.MathUtils.clamp(_ndc.x * 0.036, -0.04, 0.04);
+                    CAM.targetParallaxY = THREE.MathUtils.clamp(_ndc.y * 0.024, -0.028, 0.028);
+
+                    if (STATE.phase === 'PEEKING') {
+                        _raycaster.setFromCamera(_ndc, camera);
+                        const hits = _raycaster.intersectObject(bowlHitMesh, false);
+                        domEl.style.cursor = hits.length > 0 ? 'grab' : 'default';
+                    } else {
+                        domEl.style.cursor = 'default';
+                    }
+                }
+
+                if (!BOWL.isDragging || STATE.phase !== 'PEEKING') return;
+                if (e.cancelable) e.preventDefault();
+
+                _raycaster.setFromCamera(_ndc, camera);
+                if (_raycaster.ray.intersectPlane(BOWL.dragPlane, _tmpVec)) {
+                    let nx = _tmpVec.x + BOWL.dragOffset.x;
+                    let nz = _tmpVec.z + BOWL.dragOffset.z;
+
+                    const maxDrag = 5.4;
+                    const dist = Math.hypot(nx, nz);
+                    if (dist > maxDrag) {
+                        nx = (nx / dist) * maxDrag;
+                        nz = (nz / dist) * maxDrag;
+                    }
+
+                    const vx = nx - BOWL.prevDragPos.x;
+                    const vz = nz - BOWL.prevDragPos.z;
+                    BOWL.lastVelocity.set(vx, vz);
+                    const speed = Math.hypot(vx, vz);
+                    if (speed > 0.035) {
+                        audio.playCeramicSlide(speed * 2.2);
+                    }
+                    BOWL.prevDragPos.set(nx, 0, nz);
+
+                    const liftY = BOWL_CLOSED_POS.y + Math.min(dist * 0.28, 1.15);
+                    BOWL.targetPos.set(nx, liftY, nz);
+                    BOWL.targetRot.set(nz * 0.06, 0, -nx * 0.065);
+
+                    if (dist >= REVEAL_THRESHOLD) {
+                        BOWL.isDragging = false;
+                        domEl.style.cursor = 'default';
+                        revealOutcome(nx, nz);
+                    }
+                }
+            };
+
+            const onUp = () => {
+                if (!BOWL.isDragging) return;
+                BOWL.isDragging = false;
+                domEl.style.cursor = 'default';
+
+                if (STATE.phase === 'PEEKING') {
+                    const dist = Math.hypot(BOWL.targetPos.x, BOWL.targetPos.z);
+                    const flickSpeed = BOWL.lastVelocity.length();
+                    if (dist >= 3.25 && flickSpeed > 0.38) {
+                        revealOutcome(BOWL.targetPos.x, BOWL.targetPos.z);
+                    } else if (dist < 0.45) {
+                        BOWL.targetPos.copy(BOWL_CLOSED_POS);
+                        BOWL.targetRot.set(0, 0, 0);
+                    }
+                }
+            };
+
+            domEl.addEventListener('mousedown', onDown);
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+
+            domEl.addEventListener('touchstart', onDown, { passive: false });
+            window.addEventListener('touchmove', onMove, { passive: false });
+            window.addEventListener('touchend', onUp);
+            window.addEventListener('touchcancel', onUp);
+        }
+
+        /* =====================================================================
+           6. VÒNG LẶP RENDER 3D 60FPS ZERO-GC & ON-DEMAND SHADOWS
+           ===================================================================== */
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isPageVisible) return;
+
+            const dt = Math.min(clock.getDelta(), 0.05);
+            const t = clock.elapsedTime;
+
+            // 1. Animation XÓC BÁT
+            if (STATE.phase === 'SHAKING') {
+                shakeElapsed += dt;
+
+                if (shakeElapsed < 0.18) {
+                    BOWL.targetPos.copy(BOWL_CLOSED_POS);
+                    BOWL.targetRot.set(0, 0, 0);
+                } else if (shakeElapsed < SHAKE_TOTAL) {
+                    const prog = (shakeElapsed - 0.18) / (SHAKE_TOTAL - 0.18);
+                    const env = Math.sin(prog * Math.PI);
+                    const f = 46;
+                    plateGroup.position.x = Math.sin(shakeElapsed * f) * 0.36 * env;
+                    plateGroup.position.z = Math.cos(shakeElapsed * f * 1.12) * 0.26 * env;
+                    plateGroup.position.y = Math.abs(Math.sin(shakeElapsed * f * 0.78)) * 0.44 * env;
+                    plateGroup.rotation.z = Math.sin(shakeElapsed * f * 0.88) * 0.085 * env;
+                    plateGroup.rotation.x = Math.cos(shakeElapsed * f * 0.82) * 0.065 * env;
+
+                    CAM.shakeAmp = 0.10 * env;
+                    requestShadowUpdate();
+
+                    auraRingMesh.material.opacity = 0.25 + 0.52 * env;
+                    const s = 0.94 + 0.14 * Math.sin(shakeElapsed * 14);
+                    auraRingMesh.scale.set(s, s, 1);
+                    auraRingMesh.rotation.z += dt * 1.6;
+
+                    if (shakeElapsed >= nextRattleAt) {
+                        audio.playDiceRattle(0.45 + 0.55 * env);
+                        nextRattleAt = shakeElapsed + 0.055 + Math.random() * 0.04;
+                    }
+                } else {
+                    plateGroup.position.set(0, 0, 0);
+                    plateGroup.rotation.set(0, 0, 0);
+                    CAM.shakeAmp = 0;
+                    requestShadowUpdate();
+                    finishShake();
+                }
+            } else {
+                plateGroup.position.lerp(_zeroVec, 0.24);
+                plateGroup.rotation.x *= 0.82;
+                plateGroup.rotation.z *= 0.82;
+                CAM.shakeAmp *= 0.84;
+
+                if (winCelebrationTimer > 0) {
+                    winCelebrationTimer = Math.max(0, winCelebrationTimer - dt);
+                    const wEnv = Math.min(1, winCelebrationTimer / 0.8);
+                    auraRingMesh.material.opacity = (0.35 + 0.42 * Math.abs(Math.sin(t * 7))) * wEnv;
+                    const sc = 1.0 + 0.12 * Math.sin(t * 9);
+                    auraRingMesh.scale.set(sc, sc, 1);
+                    auraRingMesh.rotation.z += dt * 1.2;
+                } else if (auraRingMesh.material.opacity > 0.005) {
+                    auraRingMesh.material.opacity *= 0.88;
+                }
+            }
+
+            // 2. Viền ánh kim của bát khẽ lấp lánh nhẹ khi đang chờ nặn thủ công
+            if (bowlRimMat) {
+                if (STATE.phase === 'PEEKING' && !BOWL.isDragging) {
+                    bowlRimMat.emissiveIntensity = 0.20 + 0.30 * (0.5 + 0.5 * Math.sin(t * 4.5));
+                } else if (bowlRimMat.emissiveIntensity > 0.125) {
+                    bowlRimMat.emissiveIntensity += (0.12 - bowlRimMat.emissiveIntensity) * 0.14;
+                }
+            }
+
+            // 3. Nội suy chuyển động mượt của chiếc bát 3D + chỉ cập nhật shadow khi bát dịch chuyển
+            const k = BOWL.isDragging ? 0.54 : (STATE.phase === 'SHAKING' ? 0.36 : 0.14);
+            BOWL.pos.lerp(BOWL.targetPos, k);
+            BOWL.rot.x += (BOWL.targetRot.x - BOWL.rot.x) * k;
+            BOWL.rot.y += (BOWL.targetRot.y - BOWL.rot.y) * k;
+            BOWL.rot.z += (BOWL.targetRot.z - BOWL.rot.z) * k;
+
+            bowlGroup.position.copy(BOWL.pos);
+            bowlGroup.rotation.copy(BOWL.rot);
+
+            if (BOWL.pos.distanceToSquared(lastBowlPos) > 0.0001) {
+                lastBowlPos.copy(BOWL.pos);
+                requestShadowUpdate();
+            }
+
+            // 4. Cập nhật 1 material chung cho 12 hạt đèn trên vành bezel vàng
+            if (bezelBeadMat) {
+                if (STATE.phase === 'SHAKING') {
+                    bezelBeadMat.emissiveIntensity = 0.5 + 0.9 * (0.5 + 0.5 * Math.sin(t * 14));
+                } else if (winCelebrationTimer > 0) {
+                    bezelBeadMat.emissiveIntensity = 0.6 + 1.1 * (0.5 + 0.5 * Math.sin(t * 16));
+                } else {
+                    bezelBeadMat.emissiveIntensity = 0.45 + 0.35 * (0.5 + 0.5 * Math.sin(t * 2.5));
+                }
+            }
+
+            // 5. Cập nhật Pool 24 hạt Pháo kim tuyến 3D (chỉ chạy khi đang nổ)
+            if (burstPoints.visible) {
+                let anyAlive = false;
+                const bPos = burstPoints.geometry.attributes.position;
+                for (let i = 0; i < burstData.length; i++) {
+                    const p = burstData[i];
+                    if (p.life > 0) {
+                        anyAlive = true;
+                        p.life -= dt;
+                        p.vy -= 9.5 * dt;
+                        const nx = bPos.getX(i) + p.vx * dt;
+                        const ny = bPos.getY(i) + p.vy * dt;
+                        const nz = bPos.getZ(i) + p.vz * dt;
+                        bPos.setXYZ(i, nx, p.life > 0 ? ny : -20, nz);
+                    }
+                }
+                bPos.needsUpdate = true;
+                if (!anyAlive) {
+                    burstPoints.visible = false;
+                }
+            }
+
+            // 6. Camera Semi-Overhead (~66 độ) ổn định + parallax nhẹ & rung khi xóc
+            CAM.parallaxX += (CAM.targetParallaxX - CAM.parallaxX) * 0.08;
+            CAM.parallaxY += (CAM.targetParallaxY - CAM.parallaxY) * 0.08;
+
+            const phi = CAM.basePhi + CAM.parallaxY;
+            const theta = CAM.parallaxX;
+            const sx = (Math.random() - 0.5) * CAM.shakeAmp;
+            const sy = (Math.random() - 0.5) * CAM.shakeAmp;
+
+            camera.position.set(
+                CAM_TARGET.x + Math.sin(theta) * Math.sin(phi) * CAM.radius + sx,
+                CAM_TARGET.y + Math.cos(phi) * CAM.radius + sy,
+                CAM_TARGET.z + Math.cos(theta) * Math.sin(phi) * CAM.radius
+            );
+            camera.lookAt(CAM_TARGET);
+
+            // 7. Số dư Xu lăn mượt mà
+            if (Math.abs(STATE.shownBalance - STATE.balance) > 1) {
+                STATE.shownBalance += (STATE.balance - STATE.shownBalance) * 0.22;
+                if (Math.abs(STATE.shownBalance - STATE.balance) < 60) {
+                    STATE.shownBalance = STATE.balance;
+                }
+                document.getElementById('balance-display').textContent = formatComma(Math.round(STATE.shownBalance));
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        /* =====================================================================
+           7. LOGIC ĐẶT CƯỢC, CHIP BAY, XÓC, TỰ MỞ / NẶN BÁT & SOI CẦU
+           ===================================================================== */
+        function formatComma(n) {
+            return Math.floor(n).toLocaleString('en-US');
+        }
+
+        function formatChipLabel(val) {
+            if (val >= 1000000) return (val / 1000000) + 'M';
+            if (val >= 1000) return (val / 1000) + 'K';
+            return String(val);
+        }
+
+        function getChipClass(val) {
+            if (val >= 1000000) return 'chip-1m';
+            if (val >= 500000) return 'chip-500k';
+            if (val >= 100000) return 'chip-100k';
+            if (val >= 50000) return 'chip-50k';
+            return 'chip-10k';
+        }
+
+        function showToast(msg, type = 'info') {
+            const box = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            const styleMap = {
+                info: 'border-amber-400/70 text-amber-100',
+                success: 'border-emerald-400/80 text-emerald-200',
+                warn: 'border-red-400/80 text-red-200'
+            };
+            el.className = `vip-glass rounded-xl px-3.5 py-2 text-xs font-bold text-center shadow-2xl transition-all duration-300 opacity-0 -translate-y-2 ${styleMap[type] || styleMap.info}`;
+            el.textContent = msg;
+            box.appendChild(el);
+            requestAnimationFrame(() => el.classList.remove('opacity-0', '-translate-y-2'));
+            setTimeout(() => {
+                el.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => el.remove(), 300);
+            }, 2200);
+        }
+
+        /** Hiệu ứng chip bay vòng cung mượt mà từ khay chip vào cửa đặt cược */
+        function spawnFlyingChip(zoneKey, chipVal) {
+            const sourceBtn = document.querySelector(`.casino-chip[data-chip="${chipVal}"]`) || document.querySelector('.casino-chip.selected');
+            const targetEl = document.getElementById(`zone-${zoneKey}`);
+            if (!sourceBtn || !targetEl) return;
+
+            const sRect = sourceBtn.getBoundingClientRect();
+            const tRect = targetEl.getBoundingClientRect();
+            const sx = sRect.left + sRect.width / 2 - 17;
+            const sy = sRect.top + sRect.height / 2 - 17;
+            const tx = tRect.left + tRect.width * (0.32 + Math.random() * 0.36) - 17;
+            const ty = tRect.top + tRect.height * (0.45 + Math.random() * 0.25) - 17;
+
+            const chip = document.createElement('div');
+            chip.className = `flying-chip ${getChipClass(chipVal)}`;
+            chip.textContent = formatChipLabel(chipVal);
+            chip.style.left = `${sx}px`;
+            chip.style.top = `${sy}px`;
+            document.getElementById('fx-overlay').appendChild(chip);
+
+            const start = performance.now();
+            const dur = 360;
+            const dx = tx - sx;
+            const dy = ty - sy;
+            const arcH = Math.min(110, Math.hypot(dx, dy) * 0.32);
+
+            const step = (now) => {
+                const p = Math.min(1, (now - start) / dur);
+                const ease = 1 - Math.pow(1 - p, 3);
+                const cx = dx * ease;
+                const cy = dy * ease - Math.sin(p * Math.PI) * arcH;
+                const sc = 1.08 - 0.34 * ease;
+                const rot = ease * 260;
+                chip.style.transform = `translate3d(${cx}px, ${cy}px, 0) scale(${sc}) rotate(${rot}deg)`;
+                chip.style.opacity = p > 0.82 ? String((1 - p) / 0.18) : '1';
+                if (p < 1) requestAnimationFrame(step);
+                else chip.remove();
+            };
+            requestAnimationFrame(step);
+        }
+
+        /** Render chồng chip mini trong mỗi cửa cược */
+        function renderZoneChips(zoneKey, amount) {
+            const wrap = document.getElementById(`stack-${zoneKey}`);
+            if (!wrap) return;
+            if (amount <= 0) {
+                wrap.classList.add('hidden');
+                wrap.innerHTML = '';
+                return;
+            }
+            wrap.classList.remove('hidden');
+
+            const denoms = [
+                { v: 1000000, c: 'chip-1m' },
+                { v: 500000,  c: 'chip-500k' },
+                { v: 100000,  c: 'chip-100k' },
+                { v: 50000,   c: 'chip-50k' },
+                { v: 10000,   c: 'chip-10k' }
+            ];
+            const stack = [];
+            let rem = amount;
+            for (const d of denoms) {
+                while (rem >= d.v && stack.length < 5) {
+                    stack.push(d.c);
+                    rem -= d.v;
+                }
+            }
+            if (stack.length === 0) stack.push('chip-10k');
+
+            wrap.innerHTML = stack.map((cls, i) =>
+                `<div class="mini-chip ${cls}" style="bottom:${i * 3.5}px; z-index:${i + 1};"></div>`
+            ).join('');
+        }
+
+        function refreshBetUI() {
+            const canBet = STATE.phase === 'BETTING';
+            const totalBet = STATE.bets.tai + STATE.bets.bao + STATE.bets.xiu;
+            const hasLast = (STATE.lastBets.tai + STATE.lastBets.bao + STATE.lastBets.xiu) > 0;
+
+            ['tai', 'bao', 'xiu'].forEach(z => {
+                const amt = STATE.bets[z];
+                document.getElementById(`bet-amt-${z}`).textContent = amt > 0 ? formatComma(amt) : '0';
+                renderZoneChips(z, amt);
+                document.getElementById(`zone-${z}`).classList.toggle('locked', !canBet);
+            });
+
+            document.getElementById('btn-clear').disabled  = !canBet || totalBet === 0;
+            document.getElementById('btn-rebet').disabled  = !canBet || !hasLast;
+            document.getElementById('btn-double').disabled = !canBet || totalBet === 0 || STATE.balance < totalBet;
+            document.getElementById('btn-allin').disabled  = !canBet || STATE.balance <= 0;
+            document.getElementById('btn-shake').disabled  = !canBet;
+        }
+
+        function clearWinners() {
+            ['tai', 'bao', 'xiu'].forEach(z => document.getElementById(`zone-${z}`).classList.remove('winner'));
+        }
+
+        /** Đặt cược vào cửa TÀI / BÃO / XỈU */
+        function placeBet(zoneKey) {
+            if (STATE.phase !== 'BETTING') return;
+            audio.init();
+
+            if (STATE.balance <= 0) {
+                showToast('Đã hết Xu ảo! Nhấn nút "+" cạnh số dư để nạp ngay.', 'warn');
+                STATE.allInArmed = false;
+                document.getElementById('btn-allin').classList.remove('allin-armed');
+                return;
+            }
+
+            let add = STATE.allInArmed ? STATE.balance : STATE.selectedChip;
+            if (add > STATE.balance) add = STATE.balance;
+            if (add <= 0) return;
+
+            STATE.balance -= add;
+            STATE.bets[zoneKey] += add;
+
+            const chipVisual = STATE.allInArmed ? 1000000 : STATE.selectedChip;
+            if (STATE.allInArmed) {
+                STATE.allInArmed = false;
+                document.getElementById('btn-allin').classList.remove('allin-armed');
+                showToast(`All-in ${formatComma(add)} Xu vào cửa ${zoneKey.toUpperCase()}!`, 'success');
+            }
+
+            clearWinners();
+            audio.playChip();
+            spawnFlyingChip(zoneKey, chipVisual);
+            refreshBetUI();
+        }
+
+        function clearBets() {
+            if (STATE.phase !== 'BETTING') return;
+            const total = STATE.bets.tai + STATE.bets.bao + STATE.bets.xiu;
+            if (total === 0) return;
+            STATE.balance += total;
+            STATE.bets = { tai: 0, bao: 0, xiu: 0 };
+            STATE.allInArmed = false;
+            document.getElementById('btn-allin').classList.remove('allin-armed');
+            audio.playClick(620);
+            refreshBetUI();
+        }
+
+        function rebetBets() {
+            if (STATE.phase !== 'BETTING') return;
+            const needed = STATE.lastBets.tai + STATE.lastBets.bao + STATE.lastBets.xiu;
+            if (needed <= 0) return;
+
+            clearBets();
+            if (STATE.balance < needed) {
+                showToast('Số dư không đủ để đặt lại mức cược ván trước!', 'warn');
+                return;
+            }
+            STATE.balance -= needed;
+            STATE.bets = { ...STATE.lastBets };
+            clearWinners();
+            audio.playChip();
+            ['tai', 'bao', 'xiu'].forEach(z => {
+                if (STATE.bets[z] > 0) spawnFlyingChip(z, STATE.selectedChip);
+            });
+            refreshBetUI();
+        }
+
+        function doubleBets() {
+            if (STATE.phase !== 'BETTING') return;
+            const total = STATE.bets.tai + STATE.bets.bao + STATE.bets.xiu;
+            if (total <= 0) return;
+            if (STATE.balance < total) {
+                showToast('Không đủ Xu để nhân đôi cược!', 'warn');
+                return;
+            }
+            STATE.balance -= total;
+            ['tai', 'bao', 'xiu'].forEach(z => {
+                if (STATE.bets[z] > 0) {
+                    STATE.bets[z] *= 2;
+                    spawnFlyingChip(z, STATE.selectedChip);
+                }
+            });
+            audio.playChip();
+            refreshBetUI();
+        }
+
+        function handleAllIn() {
+            if (STATE.phase !== 'BETTING') return;
+            if (STATE.balance <= 0) {
+                showToast('Hết Xu ảo! Nhấn nút "+" để nạp thêm.', 'warn');
+                return;
+            }
+            audio.playClick(880);
+
+            const active = ['tai', 'bao', 'xiu'].filter(z => STATE.bets[z] > 0);
+            if (active.length === 1) {
+                const target = active[0];
+                const amt = STATE.balance;
+                STATE.balance = 0;
+                STATE.bets[target] += amt;
+                audio.playChip();
+                spawnFlyingChip(target, 1000000);
+                refreshBetUI();
+                showToast(`All-in +${formatComma(amt)} Xu vào ${target.toUpperCase()}!`, 'success');
+                return;
+            }
+
+            STATE.allInArmed = !STATE.allInArmed;
+            document.getElementById('btn-allin').classList.toggle('allin-armed', STATE.allInArmed);
+            if (STATE.allInArmed) {
+                showToast('Chọn cửa TÀI, BÃO hoặc XỈU để All-in!', 'info');
+            }
+        }
+
+        /** Bắt đầu xóc bát 3D */
+        function startShake() {
+            if (STATE.phase !== 'BETTING') return;
+            audio.init();
+
+            const totalBet = STATE.bets.tai + STATE.bets.bao + STATE.bets.xiu;
+            if (totalBet > 0) {
+                STATE.lastBets = { ...STATE.bets };
+            }
+
+            STATE.allInArmed = false;
+            document.getElementById('btn-allin').classList.remove('allin-armed');
+            clearWinners();
+            hideResultBadge();
+
+            STATE.phase = 'SHAKING';
+            shakeElapsed = 0;
+            nextRattleAt = 0.22;
+            audio.playBowlCover();
+
+            // Sinh 3 viên xúc xắc ngẫu nhiên hoàn toàn công bằng (1..6)
+            STATE.currentDice = [
+                Math.floor(Math.random() * 6) + 1,
+                Math.floor(Math.random() * 6) + 1,
+                Math.floor(Math.random() * 6) + 1
+            ];
+
+            // Đặt lại vị trí & góc xoay 3 viên xúc xắc khi bát đã úp kín
+            setTimeout(() => {
+                placeDiceOnPlate(STATE.currentDice);
+            }, 220);
+
+            refreshBetUI();
+        }
+
+        /** Kết thúc hoạt ảnh xóc: Tự mở nếu công tắc đang BẬT, hoặc sẵn sàng để người chơi kéo nặn bát */
+        function finishShake() {
+            STATE.phase = 'PEEKING';
+            BOWL.targetPos.copy(BOWL_CLOSED_POS);
+            BOWL.targetRot.set(0, 0, 0);
+
+            if (STATE.autoOpen) {
+                setTimeout(() => {
+                    if (STATE.phase === 'PEEKING') {
+                        revealOutcome(1, -0.45);
+                    }
+                }, 220);
+            }
+        }
+
+        /** Mở hẳn bát 3D & công bố kết quả, tính thưởng, hiệu ứng 3D + 2D lung linh */
+        function revealOutcome(dirX = 1, dirZ = -0.45) {
+            if (STATE.phase !== 'PEEKING') return;
+            STATE.phase = 'REVEALING';
+
+            const len = Math.hypot(dirX, dirZ) || 1;
+            const nx = dirX / len;
+            const nz = dirZ / len;
+            BOWL.targetPos.set(
+                Math.abs(nx) < 0.32 ? 5.65 : nx * 5.85,
+                1.55,
+                Math.abs(nz) < 0.25 ? -1.85 : nz * 4.45
+            );
+            BOWL.targetRot.set(0.14, 0, nx >= 0 ? -0.30 : 0.30);
+            audio.playReveal();
+
+            // Kiểm chứng lại 100% mặt ngửa trực tiếp từ 3 mesh xúc xắc 3D
+            const dice = diceMeshes.map(m => verifyDieTopFace(m));
+            const [d1, d2, d3] = dice;
+            const sum = d1 + d2 + d3;
+            const isTriple = (d1 === d2 && d2 === d3);
+
+            let outcome = 'xiu';
+            if (isTriple) outcome = 'bao';
+            else if (sum >= 11) outcome = 'tai';
+
+            const totalBet = STATE.bets.tai + STATE.bets.bao + STATE.bets.xiu;
+            let totalReturn = 0;
+            if (outcome === 'tai' && STATE.bets.tai > 0) totalReturn += STATE.bets.tai * 2;
+            if (outcome === 'xiu' && STATE.bets.xiu > 0) totalReturn += STATE.bets.xiu * 2;
+            if (outcome === 'bao' && STATE.bets.bao > 0) totalReturn += STATE.bets.bao * 25;
+
+            if (totalReturn > 0) {
+                STATE.balance += totalReturn;
+            }
+
+            // Lưu lịch sử phiên
+            STATE.roundCounter++;
+            STATE.history.push({
+                round: STATE.roundCounter,
+                dice: [d1, d2, d3],
+                sum,
+                outcome
+            });
+            if (STATE.history.length > 40) STATE.history.shift();
+
+            setTimeout(() => {
+                showResultBadge(dice, sum, outcome);
+                document.getElementById(`zone-${outcome}`).classList.add('winner');
+                renderRoadStrip();
+
+                if (totalBet > 0) {
+                    if (totalReturn > 0) {
+                        const isJackpot = outcome === 'bao';
+                        winCelebrationTimer = isJackpot ? 3.2 : 2.2;
+                        audio.playWin(isJackpot);
+                        trigger3DWinBurst(isJackpot);
+                        spawnVictoryBanner(totalReturn, isJackpot);
+                    } else {
+                        audio.playLose();
+                    }
+                } else {
+                    // Xóc thử không đặt cược vẫn có ánh sáng nhẹ chúc mừng nếu ra Bão
+                    if (outcome === 'bao') {
+                        winCelebrationTimer = 2.0;
+                        trigger3DWinBurst(true);
+                    }
+                }
+
+                STATE.bets = { tai: 0, bao: 0, xiu: 0 };
+                STATE.phase = 'BETTING';
+                refreshBetUI();
+            }, 260);
+        }
+
+        /** Hiện badge 3 viên xúc xắc & tổng điểm tinh gọn ở mép trên sân khấu */
+        function showResultBadge(dice, sum, outcome) {
+            const badge = document.getElementById('result-badge');
+            const diceRow = document.getElementById('result-dice-row');
+            const sumEl = document.getElementById('result-sum-val');
+            const tagEl = document.getElementById('result-outcome-tag');
+
+            diceRow.innerHTML = dice.map(v => {
+                const isRed = (v === 1 || v === 4);
+                return `<span class="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[#faf4e6] border border-amber-400/75 shadow flex items-center justify-center font-black text-xs sm:text-sm ${isRed ? 'text-red-600' : 'text-slate-900'}">${v}</span>`;
+            }).join('');
+
+            sumEl.textContent = sum;
+
+            if (outcome === 'tai') {
+                tagEl.textContent = 'TÀI';
+                tagEl.className = 'text-[11px] sm:text-xs font-black px-2.5 py-0.5 rounded-full tracking-wider bg-gradient-to-r from-red-700 to-amber-600 text-amber-50 border border-amber-300/80';
+            } else if (outcome === 'xiu') {
+                tagEl.textContent = 'XỈU';
+                tagEl.className = 'text-[11px] sm:text-xs font-black px-2.5 py-0.5 rounded-full tracking-wider bg-gradient-to-r from-blue-700 to-sky-600 text-white border border-sky-200/80';
+            } else {
+                tagEl.textContent = 'BÃO!';
+                tagEl.className = 'text-[11px] sm:text-xs font-black px-2.5 py-0.5 rounded-full tracking-wider bg-gradient-to-r from-fuchsia-700 to-purple-600 text-yellow-200 border border-yellow-300';
+            }
+
+            badge.classList.remove('opacity-0', 'scale-95');
+        }
+
+        function hideResultBadge() {
+            const badge = document.getElementById('result-badge');
+            badge.classList.add('opacity-0', 'scale-95');
+        }
+
+        /** Banner thắng cược ánh kim nổi bật kèm số tiền cộng động */
+        function spawnVictoryBanner(amount, isJackpot) {
+            const layer = document.getElementById('fx-overlay');
+            const el = document.createElement('div');
+            el.className = 'victory-banner fixed left-1/2 top-[44%] z-50 flex flex-col items-center';
+
+            el.innerHTML = `
+                <div class="vip-glass rounded-2xl px-6 py-3 sm:px-8 sm:py-4 border-2 border-amber-300 shadow-[0_0_45px_rgba(250,204,21,0.7)] text-center">
+                    <div class="font-vip text-xs sm:text-sm font-black uppercase tracking-[0.25em] ${isJackpot ? 'text-fuchsia-300' : 'text-amber-300'}">
+                        ${isJackpot ? '★ NỔ BÃO HOÀNG GIA ★' : '★ CHIẾN THẮNG ★'}
+                    </div>
+                    <div class="text-2xl sm:text-4xl font-black gold-gradient-text tabular-nums mt-0.5 whitespace-nowrap">
+                        +<span class="win-roll-num">0</span>
+                    </div>
+                </div>
+            `;
+            layer.appendChild(el);
+
+            // Chạy số đếm tăng dần cực đã mắt
+            const numSpan = el.querySelector('.win-roll-num');
+            const start = performance.now();
+            const dur = 750;
+            const tick = (now) => {
+                const p = Math.min(1, (now - start) / dur);
+                const eased = 1 - Math.pow(1 - p, 3);
+                numSpan.textContent = formatComma(Math.round(amount * eased));
+                if (p < 1) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+
+            setTimeout(() => el.remove(), 2900);
+        }
+
+        /** Render thanh Cầu phiên (Road Strip) */
+        function renderRoadStrip() {
+            let cTai = 0, cXiu = 0, cBao = 0;
+            STATE.history.forEach(h => {
+                if (h.outcome === 'tai') cTai++;
+                else if (h.outcome === 'xiu') cXiu++;
+                else cBao++;
+            });
+
+            document.getElementById('stat-tai').textContent = cTai;
+            document.getElementById('stat-xiu').textContent = cXiu;
+            document.getElementById('stat-bao').textContent = cBao;
+
+            const container = document.getElementById('history-beads');
+            container.innerHTML = STATE.history.map((item, idx) => {
+                const cls = item.outcome === 'tai' ? 'bead-tai' : item.outcome === 'xiu' ? 'bead-xiu' : 'bead-bao';
+                const letter = item.outcome === 'tai' ? 'T' : item.outcome === 'xiu' ? 'X' : 'B';
+                const latest = idx === STATE.history.length - 1 ? 'bead-latest' : '';
+                return `<span class="road-bead ${cls} ${latest}" title="Phiên #${item.round}: ${item.dice.join('-')} (${item.sum})">${letter}</span>`;
+            }).join('');
+
+            container.scrollLeft = container.scrollWidth;
+        }
+
+        /** Render Modal Bảng Soi Cầu chi tiết (Tỷ lệ % + Biểu đồ đường SVG 3..18 + Danh sách phiên) */
+        function renderRoadmapModal() {
+            const total = Math.max(1, STATE.history.length);
+            let cTai = 0, cXiu = 0, cBao = 0;
+            STATE.history.forEach(h => {
+                if (h.outcome === 'tai') cTai++;
+                else if (h.outcome === 'xiu') cXiu++;
+                else cBao++;
+            });
+
+            const pTai = Math.round((cTai / total) * 100);
+            const pBao = Math.round((cBao / total) * 100);
+            const pXiu = Math.max(0, 100 - pTai - pBao);
+
+            document.getElementById('modal-pct-tai').textContent = `${pTai}% (${cTai})`;
+            document.getElementById('modal-pct-bao').textContent = `${pBao}% (${cBao})`;
+            document.getElementById('modal-pct-xiu').textContent = `${pXiu}% (${cXiu})`;
+
+            document.getElementById('bar-tai').style.width = `${pTai}%`;
+            document.getElementById('bar-bao').style.width = `${pBao}%`;
+            document.getElementById('bar-xiu').style.width = `${pXiu}%`;
+
+            // Vẽ biểu đồ đường tổng điểm (3..18) bằng SVG sắc nét
+            const recent = STATE.history.slice(-16);
+            const svgW = 500, svgH = 148;
+            const padL = 26, padR = 14, padT = 16, padB = 22;
+            const plotW = svgW - padL - padR;
+            const plotH = svgH - padT - padB;
+
+            const yForSum = (s) => padT + ((18 - s) / 15) * plotH;
+            const xForIdx = (i) => recent.length <= 1 ? padL + plotW / 2 : padL + (i / (recent.length - 1)) * plotW;
+
+            const gridLines = [18, 14, 11, 7, 3].map(v => {
+                const y = yForSum(v);
+                const isMid = v === 11;
+                return `
+                    <line x1="${padL}" y1="${y}" x2="${svgW - padR}" y2="${y}"
+                        stroke="${isMid ? 'rgba(250,204,21,0.55)' : 'rgba(255,255,255,0.1)'}"
+                        stroke-dasharray="${isMid ? '5 4' : '2 4'}" stroke-width="${isMid ? '1.3' : '1'}"/>
+                    <text x="${padL - 6}" y="${y + 3.5}" fill="${isMid ? '#fde047' : 'rgba(254,243,199,0.55)'}"
+                        font-size="9.5" font-weight="700" text-anchor="end">${v}</text>
+                `;
+            }).join('');
+
+            const polyPts = recent.map((item, i) => `${xForIdx(i).toFixed(1)},${yForSum(item.sum).toFixed(1)}`).join(' ');
+
+            const nodes = recent.map((item, i) => {
+                const cx = xForIdx(i);
+                const cy = yForSum(item.sum);
+                const fill = item.outcome === 'tai' ? '#ef4444' : item.outcome === 'xiu' ? '#3b82f6' : '#c026d3';
+                const stroke = item.outcome === 'xiu' ? '#e2e8f0' : '#fde047';
+                return `
+                    <g>
+                        <circle cx="${cx}" cy="${cy}" r="8.5" fill="${fill}" stroke="${stroke}" stroke-width="1.6"/>
+                        <text x="${cx}" y="${cy + 3.2}" fill="#ffffff" font-size="8.5" font-weight="900" text-anchor="middle">${item.sum}</text>
+                        <text x="${cx}" y="${svgH - 4}" fill="rgba(254,243,199,0.45)" font-size="8" text-anchor="middle">#${item.round}</text>
+                    </g>
+                `;
+            }).join('');
+
+            document.getElementById('roadmap-svg-wrap').innerHTML = `
+                <svg viewBox="0 0 ${svgW} ${svgH}" class="w-full h-full overflow-visible">
+                    ${gridLines}
+                    <polyline points="${polyPts}" fill="none" stroke="rgba(250,204,21,0.75)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+                    ${nodes}
+                </svg>
+            `;
+
+            // Danh sách 10 phiên gần nhất (mới nhất trên cùng)
+            const listEl = document.getElementById('roadmap-list');
+            listEl.innerHTML = [...STATE.history].reverse().slice(0, 10).map(item => {
+                const tagCls = item.outcome === 'tai'
+                    ? 'bg-red-700/85 text-amber-100 border-amber-300/60'
+                    : item.outcome === 'xiu'
+                        ? 'bg-blue-700/85 text-white border-sky-300/60'
+                        : 'bg-fuchsia-700/90 text-yellow-200 border-yellow-300';
+                const label = item.outcome === 'tai' ? 'TÀI' : item.outcome === 'xiu' ? 'XỈU' : 'BÃO';
+                const diceHtml = item.dice.map(v => {
+                    const red = (v === 1 || v === 4);
+                    return `<span class="w-5 h-5 rounded bg-[#fbf5e8] text-[11px] font-black flex items-center justify-center ${red ? 'text-red-600' : 'text-slate-900'}">${v}</span>`;
+                }).join('');
+
+                return `
+                    <div class="bg-black/45 border border-amber-400/20 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                        <span class="text-[11px] font-bold text-amber-200/65">#${item.round}</span>
+                        <div class="flex items-center gap-1">${diceHtml}</div>
+                        <span class="text-xs font-black text-amber-100 tabular-nums">${item.sum}đ</span>
+                        <span class="text-[10px] font-black px-2 py-0.5 rounded-md border ${tagCls}">${label}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /* =====================================================================
+           8. GẮN SỰ KIỆN GIAO DIỆN & KHỞI CHẠY
+           ===================================================================== */
+        function bindUIEvents() {
+            // Chọn chip casino
+            document.querySelectorAll('.casino-chip').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    audio.playClick(860);
+                    document.querySelectorAll('.casino-chip').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    STATE.selectedChip = parseInt(btn.dataset.chip, 10);
+                    STATE.allInArmed = false;
+                    document.getElementById('btn-allin').classList.remove('allin-armed');
+                });
+            });
+
+            // Nhấn vào các cửa đặt cược
+            document.querySelectorAll('.bet-card').forEach(card => {
+                card.addEventListener('click', () => placeBet(card.dataset.bet));
+            });
+
+            // Hàng nút điều khiển cược & XÓC
+            document.getElementById('btn-clear').addEventListener('click', clearBets);
+            document.getElementById('btn-rebet').addEventListener('click', rebetBets);
+            document.getElementById('btn-double').addEventListener('click', doubleBets);
+            document.getElementById('btn-allin').addEventListener('click', handleAllIn);
+            document.getElementById('btn-shake').addEventListener('click', startShake);
+
+            // Công tắc gạt "Tự mở"
+            const autoBtn = document.getElementById('btn-auto-open');
+            const autoSwitch = document.getElementById('auto-open-switch');
+            autoBtn.addEventListener('click', () => {
+                STATE.autoOpen = !STATE.autoOpen;
+                autoBtn.setAttribute('aria-checked', String(STATE.autoOpen));
+                autoSwitch.classList.toggle('active', STATE.autoOpen);
+                audio.playClick(STATE.autoOpen ? 980 : 660);
+
+                // Nếu bật Tự mở ngay lúc đang chờ nặn bát -> mở ngay lập tức cho tiện
+                if (STATE.autoOpen && STATE.phase === 'PEEKING') {
+                    revealOutcome(1, -0.45);
+                }
+            });
+
+            // Nút nạp nhanh +10,000,000 Xu ảo
+            document.getElementById('btn-refill').addEventListener('click', () => {
+                audio.playWin(false);
+                STATE.balance += START_BALANCE;
+                refreshBetUI();
+                showToast('Đã nạp thêm +10,000,000 Xu ảo!', 'success');
+            });
+
+            // Bật / Tắt âm thanh
+            document.getElementById('btn-sound').addEventListener('click', () => {
+                audio.setEnabled(!audio.enabled);
+                document.getElementById('icon-sound-on').classList.toggle('hidden', !audio.enabled);
+                document.getElementById('icon-sound-off').classList.toggle('hidden', audio.enabled);
+                if (audio.enabled) audio.playClick(820);
+            });
+
+            // Modal Bảng Soi Cầu
+            const modal = document.getElementById('roadmap-modal');
+            const openModal = () => {
+                audio.playClick(820);
+                renderRoadmapModal();
+                modal.classList.remove('hidden');
+            };
+            const closeModal = () => {
+                audio.playClick(640);
+                modal.classList.add('hidden');
+            };
+            document.getElementById('btn-open-roadmap').addEventListener('click', openModal);
+            document.getElementById('road-strip-bar').addEventListener('click', openModal);
+            document.getElementById('btn-close-roadmap').addEventListener('click', closeModal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
+        }
+
+        // Khởi chạy toàn bộ trò chơi sau khi trang tải hoàn tất
+        window.onload = function () {
+            try {
+                init3D();
+                bindUIEvents();
+                renderRoadStrip();
+                refreshBetUI();
+                // Đảm bảo căn tâm lại một nhịp sau khi font & layout ổn định hoàn toàn
+                setTimeout(syncCameraToStage, 120);
+                animate();
+            } catch (err) {
+                console.error('Lỗi khởi tạo 3D:', err);
+                showToast('Trình duyệt không hỗ trợ WebGL 3D.', 'warn');
+            }
+        };
+    </script>
+</body>
+</html>
